@@ -94,6 +94,21 @@ describe('built-in conditions', () => {
     assertMatches(['cooldownReady', 100, 80, 50], false)
   })
 
+  it('evaluates type categories without coercion', () => {
+    assertMatches(['typeIs', 'value', 'string'], true)
+    assertMatches(['typeIs', 1, 'string'], false)
+    assertMatches(['typeIs', Number.NaN, 'number'], true)
+    assertMatches(['typeIs', 1, 'finite-number'], true)
+    assertMatches(['typeIs', Number.NaN, 'finite-number'], false)
+    assertMatches(['typeIs', Number.POSITIVE_INFINITY, 'finite-number'], false)
+    assertMatches(['typeIs', false, 'boolean'], true)
+    assertMatches(['typeIs', [], 'array'], true)
+    assertMatches(['typeIs', {}, 'record'], true)
+    assertMatches(['typeIs', null, 'record'], false)
+    assertMatches(['typeIs', [], 'record'], false)
+    assertMatches(['typeIs', 'value', 'unknown'], false)
+  })
+
   it('resolves path references before condition execution', () => {
     const result = evaluateCondition(
       ['and', ['eq', '$context.count', 2], ['eq', '$data.selected', '$input.target']],

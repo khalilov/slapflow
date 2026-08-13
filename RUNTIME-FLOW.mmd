@@ -1,0 +1,18 @@
+flowchart LR
+  DOM["DOM event"] --> CFB["CFB binding"]
+  SYNTHETIC["Synthetic event<br/>API, timer, worker"] --> BUS["PubSubBehavior"]
+  TRANSPORT["WebSocket transport"] --> WS["WebSocket bridge"]
+  WS --> BUS
+  BUS --> WS
+  WS --> TRANSPORT
+  BUS --> CFB
+
+  CFB --> CONCURRENCY["Concurrency lane"]
+  CONCURRENCY --> RUNNER["Behavior runner"]
+  RUNNER --> CONDITIONS["Conditions"]
+  CONDITIONS --> ACTIONS["Actions"]
+  ACTIONS --> RESULT["Run result"]
+
+  RUNNER --> DIAGNOSTICS["cfb.* diagnostics"]
+  DIAGNOSTICS --> BUS
+  RESULT --> DIAGNOSTICS

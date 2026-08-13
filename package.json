@@ -35,7 +35,11 @@
   "module": "./dist/index.js",
   "files": [
     "dist",
+    "SPEC.md",
+    "SPEC-RU.md",
+    "RUNTIME-FLOW.mmd",
     "examples/*.ts",
+    "examples/*.mmd",
     "examples/todo-app/README.md",
     "examples/todo-app/build.ts",
     "examples/todo-app/bun.lock",

@@ -49,6 +49,7 @@ describe('registry', () => {
       'neq',
       'notEmpty',
       'truthy',
+      'typeIs',
     ])
   })
 

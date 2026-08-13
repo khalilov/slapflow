@@ -6,26 +6,7 @@ The package is not coupled to a UI, server framework, scheduler, or domain model
 
 ## Runtime Flow
 
-```mermaid
-flowchart LR
-  DOM["DOM event"] --> CFB["CFB binding"]
-  SYNTHETIC["Synthetic event: API, timer, worker"] --> BUS["PubSubBehavior"]
-  TRANSPORT["WebSocket transport"] --> WS["WebSocket bridge"]
-  WS --> BUS
-  BUS --> WS
-  WS --> TRANSPORT
-  BUS --> CFB
-
-  CFB --> CONCURRENCY["Concurrency lane"]
-  CONCURRENCY --> RUNNER["Behavior runner"]
-  RUNNER --> CONDITIONS["Conditions"]
-  CONDITIONS --> ACTIONS["Actions"]
-  ACTIONS --> RESULT["Run result"]
-
-  RUNNER --> DIAGNOSTICS["cfb.* diagnostics"]
-  DIAGNOSTICS --> BUS
-  RESULT --> DIAGNOSTICS
-```
+[View the runtime flow](RUNTIME-FLOW.mmd).
 
 ## Public API
 
@@ -145,7 +126,7 @@ src/registry/
 Each runner receives its own mutable registry copy. Applications can override any built-in action or condition:
 
 ```ts
-runner.registerAction('core.setData', customSetData)
+runner.registerAction('app.setData', customSetData)
 runner.registerCondition('eq', customEq)
 ```
 
@@ -155,39 +136,56 @@ Configuration validation accesses registries through the minimal `has(name)` con
 
 ## Built-In Actions
 
-- `core.noop`
-- `core.stop`
-- `core.fail`
-- `core.fetch`
-- `core.loop`
-- `core.sequence`
-- `core.selector`
-- `core.parallel`
-- `core.set`
-- `core.setData`
-- `core.emit`
-- `core.patch`
-- `core.delay`
+| Action          | Props                                                                                                                                              | Description                                                                                                       |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `core.noop`     | —                                                                                                                                                  | Completes successfully without changing runtime state.                                                            |
+| `core.stop`     | `reason?`                                                                                                                                          | Stops the run with an optional reason.                                                                            |
+| `core.fail`     | `reason?`, `data?`                                                                                                                                 | Fails the current strategy with an optional reason and error data.                                                |
+| `core.fetch`    | **`url`**, `method?`, `headers?`, `body?`, `credentials?`, `response?`, `dataPath?`, `contextPath?`, `acceptStatuses?`, `retryStatuses?`, `retry?` | Fetches data with cancellation, response parsing, status control, and retry backoff.                              |
+| `core.loop`     | `duration?`, `max?`, `immediate?`                                                                                                                  | Repeats its `then` branch on an interval until aborted or the iteration limit is reached.                         |
+| `core.sequence` | —                                                                                                                                                  | Executes `then` targets in order.                                                                                 |
+| `core.selector` | —                                                                                                                                                  | Executes `then` targets until one succeeds or stops.                                                              |
+| `core.parallel` | —                                                                                                                                                  | Executes `then` targets concurrently in isolated context and data branches.                                       |
+| `core.set`      | **`path`**, `value?`, `data?`                                                                                                                      | Writes `value` to a nested context `path`; optional `data` is merged into runtime data.                           |
+| `core.setData`  | **`path`**, `value?`, `data?`                                                                                                                      | **Deprecated.** Writes `value` to runtime data; use `runtime.data.set(path, value)` inside an application action. |
+| `core.emit`     | **`type`**, `payload?`                                                                                                                             | Appends an event to the run result.                                                                               |
+| `core.patch`    | **`patch`**                                                                                                                                        | Appends a patch to the run result.                                                                                |
+| `core.delay`    | `ms?`                                                                                                                                              | Waits for the configured duration or until the run is aborted.                                                    |
+
+Bold props are required; `?` marks optional props. All names in this column are fields of the strategy's `props` object.
 
 `core.loop` executes its `then` branch every `props.duration` milliseconds until the run is aborted or `props.max` iterations complete. The default maximum is `999`, leaving one of the default `maxStepCount: 1000` steps for the loop action itself; `max: -1` disables the iteration limit, but not runner safety limits. Zero, values below `-1`, `NaN`, and infinity fall back to the default. When `props.immediate` is `true`, the first iteration executes immediately, counts toward `max`, and does not wait for the first interval. Overlapping iterations are skipped. A failed iteration executes `catch`; the loop continues when `catch` succeeds.
 Nested `core.loop` strategies are invalid, including transitive references through `then` or `catch`. Sibling loops in separate branches are allowed.
 
 Actions can execute their own configured branches through `runtime.executeThen()` and `runtime.executeCatch()`. `executeThen()` honors the strategy's `mode`, so control actions such as `core.loop` can compose with `sequence`, `selector`, and `parallel` execution without accessing runner internals.
 
-`core.set` writes a nested context value through `runtime.set`. `core.setData` writes temporary chain data through `runtime.data.set`.
+`core.set` writes a nested context value through `runtime.set`. `core.setData` remains available for compatibility; new application actions should write temporary chain data through `runtime.data.set(path, value)`.
 
 `core.fetch` uses native `fetch` with the run signal. Its `response` prop selects `json`, `text`, `blob`, `arrayBuffer`, or `none`; successful responses are normalized as `{ status, ok, headers, body }` and can be written to `dataPath` or `contextPath`. `acceptStatuses` overrides the default `Response.ok` success condition. `credentials` accepts `include`, `same-origin`, or `omit` and is forwarded to native `fetch`. CORS, preflight requests, SameSite cookie rules, and server cookie policy remain the responsibility of the browser and server. `retry` accepts `initialDelay`, `maxDelay`, `multiplier`, `jitter`, and `maxAttempts`; `retryStatuses` overrides the default retryable statuses. The default performs two retries for network failures and statuses `408`, `425`, `429`, and `5xx`. Response-body parsing failures do not retry. An aborted request or retry returns `skip`. Retries are intended for replayable request bodies.
 
 ## Built-In Conditions
 
-- `eq`, `neq`
-- `gt`, `gte`, `lt`, `lte`
-- `truthy`, `falsy`
-- `exists`, `missing`
-- `empty`, `notEmpty`
-- `includes`
-- `changed`
-- `cooldownReady`
+| Condition       | Description                                                                   | Example                                                                         |
+| --------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `and`           | Matches when every nested condition matches.                                  | `['and', ['typeIs', '$input.id', 'string'], ['notEmpty', '$input.id']]`         |
+| `or`            | Matches when at least one nested condition matches.                           | `['or', ['eq', '$context.status', 'ready'], ['eq', '$context.status', 'idle']]` |
+| `not`           | Inverts a nested condition.                                                   | `['not', ['truthy', '$context.disabled']]`                                      |
+| `eq`            | Compares two values with `Object.is`.                                         | `['eq', '$context.status', 'ready']`                                            |
+| `neq`           | Matches when `Object.is` does not consider the values equal.                  | `['neq', '$context.status', 'failed']`                                          |
+| `gt`            | Compares values numerically with `>`.                                         | `['gt', '$context.count', 0]`                                                   |
+| `gte`           | Compares values numerically with `>=`.                                        | `['gte', '$context.count', 1]`                                                  |
+| `lt`            | Compares values numerically with `<`.                                         | `['lt', '$context.count', 100]`                                                 |
+| `lte`           | Compares values numerically with `<=`.                                        | `['lte', '$context.count', 99]`                                                 |
+| `truthy`        | Applies JavaScript truthiness.                                                | `['truthy', '$context.enabled']`                                                |
+| `falsy`         | Applies JavaScript falsiness.                                                 | `['falsy', '$context.disabled']`                                                |
+| `exists`        | Matches values other than `null` and `undefined`.                             | `['exists', '$data.response']`                                                  |
+| `missing`       | Matches `null` or `undefined`.                                                | `['missing', '$data.error']`                                                    |
+| `empty`         | Matches empty strings, arrays, maps, sets, objects, and nullish values.       | `['empty', '$context.items']`                                                   |
+| `notEmpty`      | Matches supported values with a size greater than zero.                       | `['notEmpty', '$context.items']`                                                |
+| `includes`      | Checks membership in strings, arrays, and sets.                               | `['includes', ['parts', 'food'], '$input.resource']`                            |
+| `typeIs`        | Matches `string`, `number`, `finite-number`, `boolean`, `array`, or `record`. | `['typeIs', '$input.amount', 'finite-number']`                                  |
+| `changed`       | Matches when current and previous values differ by `Object.is`.               | `['changed', '$context.current', '$context.previous']`                          |
+| `cooldownReady` | Matches when no previous timestamp exists or the cooldown has elapsed.        | `['cooldownReady', '$context.now', '$context.lastAt', 1000]`                    |
 
 ## Config Example
 
@@ -236,9 +234,9 @@ type BehaviorRuntime = {
   variables?: {
     get(path: string): unknown
   }
-  /** @deprecated Use runtime.data.get. */
+  /** @deprecated Use runtime.data.get(path). */
   getData(path: string): unknown
-  /** @deprecated Use runtime.data.set. */
+  /** @deprecated Use runtime.data.set(path, value). */
   setData(path: string, value: unknown): void
   resolve(value: unknown): unknown
   signal: AbortSignal

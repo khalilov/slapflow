@@ -102,9 +102,60 @@ const applyCatalog = ({ runtime }) => {
 }
 ```
 
+## Route branches with compound conditions
+
+Every `then` and `catch` target can have its own condition. Combine built-in conditions with `and`, `or`, and `not` to keep branching in the graph:
+
+```ts
+const config = {
+  strategies: {
+    'catalog.load': {
+      fn: 'core.fetch',
+      props: {
+        url: '/api/catalog',
+        response: 'json',
+        dataPath: 'catalogResponse',
+      },
+      then: [
+        {
+          strategy: 'catalog.apply',
+          when: [
+            'and',
+            ['typeIs', '$data.catalogResponse.body', 'record'],
+            ['typeIs', '$data.catalogResponse.body.items', 'array'],
+            ['not', ['empty', '$data.catalogResponse.body.items']],
+          ],
+        },
+        {
+          strategy: 'catalog.showEmpty',
+          when: ['or', ['missing', '$data.catalogResponse.body.items'], ['empty', '$data.catalogResponse.body.items']],
+        },
+      ],
+      catch: [
+        {
+          strategy: 'catalog.queueRetry',
+          when: ['and', ['falsy', '$context.network.online'], ['includes', ['startup', 'refresh'], '$input.source']],
+        },
+        {
+          strategy: 'catalog.showError',
+          when: ['or', ['truthy', '$context.network.online'], ['eq', '$input.source', 'manual']],
+        },
+      ],
+    },
+    'catalog.apply': { fn: 'catalog.apply' },
+    'catalog.showEmpty': { fn: 'catalog.showEmpty' },
+    'catalog.queueRetry': { fn: 'catalog.queueRetry' },
+    'catalog.showError': { fn: 'catalog.showError' },
+  },
+}
+```
+
+[View the execution flow](examples/compound-conditions.mmd).
+
 ## What CFB provides
 
 - Declarative strategies, conditions, error branches, and entrypoints.
+- A broad set of [built-in conditions](SPEC.md#built-in-conditions) for comparisons, type checks, collections, and compound logic.
 - Typed PubSub bindings and delegated DOM bindings.
 - `parallel`, `latest`, `queue`, and `drop` concurrency modes with per-entity lanes.
 - A WebSocket bridge for forwarding selected bus events.

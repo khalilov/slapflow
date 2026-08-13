@@ -102,9 +102,60 @@ const applyCatalog = ({ runtime }) => {
 }
 ```
 
+## Ветвление со сложными условиями
+
+Каждая цель в `then` и `catch` может иметь собственное условие. Встроенные условия комбинируются через `and`, `or` и `not`, поэтому ветвление остаётся в графе:
+
+```ts
+const config = {
+  strategies: {
+    'catalog.load': {
+      fn: 'core.fetch',
+      props: {
+        url: '/api/catalog',
+        response: 'json',
+        dataPath: 'catalogResponse',
+      },
+      then: [
+        {
+          strategy: 'catalog.apply',
+          when: [
+            'and',
+            ['typeIs', '$data.catalogResponse.body', 'record'],
+            ['typeIs', '$data.catalogResponse.body.items', 'array'],
+            ['not', ['empty', '$data.catalogResponse.body.items']],
+          ],
+        },
+        {
+          strategy: 'catalog.showEmpty',
+          when: ['or', ['missing', '$data.catalogResponse.body.items'], ['empty', '$data.catalogResponse.body.items']],
+        },
+      ],
+      catch: [
+        {
+          strategy: 'catalog.queueRetry',
+          when: ['and', ['falsy', '$context.network.online'], ['includes', ['startup', 'refresh'], '$input.source']],
+        },
+        {
+          strategy: 'catalog.showError',
+          when: ['or', ['truthy', '$context.network.online'], ['eq', '$input.source', 'manual']],
+        },
+      ],
+    },
+    'catalog.apply': { fn: 'catalog.apply' },
+    'catalog.showEmpty': { fn: 'catalog.showEmpty' },
+    'catalog.queueRetry': { fn: 'catalog.queueRetry' },
+    'catalog.showError': { fn: 'catalog.showError' },
+  },
+}
+```
+
+[Посмотреть схему выполнения](examples/compound-conditions.mmd).
+
 ## Что даёт CFB
 
 - Декларативные стратегии, условия, ветки обработки ошибок и точки входа.
+- Большой набор [встроенных условий](SPEC-RU.md#встроенные-условия) для сравнений, проверки типов, коллекций и составной логики.
 - Типизированные PubSub-привязки и делегированные DOM-привязки.
 - Режимы `parallel`, `latest`, `queue` и `drop` с отдельными линиями для разных сущностей.
 - WebSocket-мост для передачи выбранных событий шины.

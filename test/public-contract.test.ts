@@ -66,7 +66,7 @@ describe('public contract', () => {
     const spec = await readFile('SPEC.md', 'utf8')
 
     for (const name of Object.keys(createBuiltinActions<unknown, unknown>())) {
-      assert.equal(spec.includes(`- \`${name}\``), true, `${name} is missing from SPEC.md`)
+      assert.equal(spec.includes(`| \`${name}\``), true, `${name} is missing from SPEC.md`)
     }
   })
 

@@ -14,6 +14,7 @@ import { missingCondition } from '~/helpers/conditions/missingCondition'
 import { neqCondition } from '~/helpers/conditions/neqCondition'
 import { notEmptyCondition } from '~/helpers/conditions/notEmptyCondition'
 import { truthyCondition } from '~/helpers/conditions/truthyCondition'
+import { typeIsCondition } from '~/helpers/conditions/typeIsCondition'
 
 export type ConditionsRegistry<TContext> = Map<string, BehaviorConditionFn<TContext>>
 
@@ -32,6 +33,7 @@ export const createConditionsRegistry = <TContext>(): ConditionsRegistry<TContex
     ['empty', emptyCondition],
     ['notEmpty', notEmptyCondition],
     ['includes', includesCondition],
+    ['typeIs', typeIsCondition],
     ['changed', changedCondition],
     ['cooldownReady', cooldownReadyCondition],
   ])

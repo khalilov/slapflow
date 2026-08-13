@@ -6,26 +6,7 @@
 
 ## Поток выполнения
 
-```mermaid
-flowchart LR
-  DOM["DOM-событие"] --> CFB["Привязка CFB"]
-  SYNTHETIC["Синтетическое событие: API, таймер, воркер"] --> BUS["PubSubBehavior"]
-  TRANSPORT["WebSocket-транспорт"] --> WS["WebSocket-мост"]
-  WS --> BUS
-  BUS --> WS
-  WS --> TRANSPORT
-  BUS --> CFB
-
-  CFB --> CONCURRENCY["Линия конкурентного выполнения"]
-  CONCURRENCY --> RUNNER["Исполнитель поведения"]
-  RUNNER --> CONDITIONS["Условия"]
-  CONDITIONS --> ACTIONS["Действия"]
-  ACTIONS --> RESULT["Результат выполнения"]
-
-  RUNNER --> DIAGNOSTICS["Диагностика cfb.*"]
-  DIAGNOSTICS --> BUS
-  RESULT --> DIAGNOSTICS
-```
+[Посмотреть схему потока выполнения](RUNTIME-FLOW.mmd).
 
 ## Публичный API
 
@@ -145,7 +126,7 @@ src/registry/
 Каждый исполнитель получает собственную изменяемую копию реестра. Приложения могут переопределить любое встроенное действие или условие:
 
 ```ts
-runner.registerAction('core.setData', customSetData)
+runner.registerAction('app.setData', customSetData)
 runner.registerCondition('eq', customEq)
 ```
 
@@ -155,39 +136,56 @@ runner.registerCondition('eq', customEq)
 
 ## Встроенные действия
 
-- `core.noop`
-- `core.stop`
-- `core.fail`
-- `core.fetch`
-- `core.loop`
-- `core.sequence`
-- `core.selector`
-- `core.parallel`
-- `core.set`
-- `core.setData`
-- `core.emit`
-- `core.patch`
-- `core.delay`
+| Действие        | Props                                                                                                                                              | Описание                                                                                                            |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `core.noop`     | —                                                                                                                                                  | Успешно завершается, не изменяя состояние runtime.                                                                  |
+| `core.stop`     | `reason?`                                                                                                                                          | Останавливает запуск с необязательной причиной.                                                                     |
+| `core.fail`     | `reason?`, `data?`                                                                                                                                 | Завершает текущую стратегию ошибкой с необязательной причиной и данными ошибки.                                     |
+| `core.fetch`    | **`url`**, `method?`, `headers?`, `body?`, `credentials?`, `response?`, `dataPath?`, `contextPath?`, `acceptStatuses?`, `retryStatuses?`, `retry?` | Загружает данные с отменой, разбором ответа, контролем статусов и retry backoff.                                    |
+| `core.loop`     | `duration?`, `max?`, `immediate?`                                                                                                                  | Повторяет ветку `then` по интервалу до отмены или достижения лимита итераций.                                       |
+| `core.sequence` | —                                                                                                                                                  | Выполняет цели `then` по порядку.                                                                                   |
+| `core.selector` | —                                                                                                                                                  | Выполняет цели `then` до первого успешного результата или остановки.                                                |
+| `core.parallel` | —                                                                                                                                                  | Выполняет цели `then` параллельно в изолированных ветках context и data.                                            |
+| `core.set`      | **`path`**, `value?`, `data?`                                                                                                                      | Записывает `value` во вложенный путь context; необязательный `data` объединяется с runtime data.                    |
+| `core.setData`  | **`path`**, `value?`, `data?`                                                                                                                      | **Устарело.** Записывает `value` в runtime data; в прикладном действии используйте `runtime.data.set(path, value)`. |
+| `core.emit`     | **`type`**, `payload?`                                                                                                                             | Добавляет событие в результат запуска.                                                                              |
+| `core.patch`    | **`patch`**                                                                                                                                        | Добавляет patch в результат запуска.                                                                                |
+| `core.delay`    | `ms?`                                                                                                                                              | Ждёт указанное время или отмену запуска.                                                                            |
+
+Жирным отмечены обязательные props; `?` обозначает необязательные. Все имена в этой колонке являются полями объекта `props` стратегии.
 
 `core.loop` выполняет ветку `then` каждые `props.duration` миллисекунд до отмены запуска или завершения `props.max` итераций. Максимум по умолчанию — `999`: один из стандартных `maxStepCount: 1000` шагов расходуется на сам loop action. Значение `max: -1` отключает ограничение количества итераций, но не safety limits runner-а. Ноль, значения меньше `-1`, `NaN` и бесконечность заменяются значением по умолчанию. Если `props.immediate` равен `true`, первая итерация выполняется сразу, учитывается в `max` и не ждёт первого интервала. Пересекающиеся итерации пропускаются. При ошибке итерации выполняется `catch`; после успешного `catch` цикл продолжается.
 Вложенные стратегии `core.loop` запрещены, включая транзитивные ссылки через `then` или `catch`. Соседние циклы в отдельных ветках разрешены.
 
 Экшены могут выполнять собственные настроенные ветки через `runtime.executeThen()` и `runtime.executeCatch()`. `executeThen()` учитывает `mode` стратегии, поэтому управляющие экшены вроде `core.loop` могут компоноваться с выполнением `sequence`, `selector` и `parallel`, не обращаясь к внутренностям runner.
 
-`core.set` записывает вложенное значение контекста через `runtime.set`. `core.setData` записывает временные данные цепочки через `runtime.data.set`.
+`core.set` записывает вложенное значение контекста через `runtime.set`. `core.setData` сохранён для совместимости; новые прикладные действия должны записывать временные данные цепочки через `runtime.data.set(path, value)`.
 
 `core.fetch` использует нативный `fetch` с signal текущего запуска. Свойство `response` выбирает `json`, `text`, `blob`, `arrayBuffer` или `none`; успешный ответ нормализуется в `{ status, ok, headers, body }` и может быть записан по `dataPath` или `contextPath`. `acceptStatuses` переопределяет стандартную проверку успеха через `Response.ok`. `credentials` принимает `include`, `same-origin` или `omit` и передаётся в нативный `fetch`. CORS, preflight-запросы, правила SameSite cookie и политика cookie сервера остаются ответственностью браузера и сервера. `retry` принимает `initialDelay`, `maxDelay`, `multiplier`, `jitter` и `maxAttempts`; `retryStatuses` переопределяет стандартный набор повторяемых статусов. По умолчанию выполняются две повторные попытки для сетевых ошибок и статусов `408`, `425`, `429` и `5xx`. Ошибки разбора response body не повторяются. Отменённый запрос или retry возвращает `skip`. Ретраи предназначены для body, который можно безопасно повторно отправить.
 
 ## Встроенные условия
 
-- `eq`, `neq`
-- `gt`, `gte`, `lt`, `lte`
-- `truthy`, `falsy`
-- `exists`, `missing`
-- `empty`, `notEmpty`
-- `includes`
-- `changed`
-- `cooldownReady`
+| Условие         | Описание                                                                          | Пример                                                                          |
+| --------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `and`           | Совпадает, когда совпали все вложенные условия.                                   | `['and', ['typeIs', '$input.id', 'string'], ['notEmpty', '$input.id']]`         |
+| `or`            | Совпадает, когда совпало хотя бы одно вложенное условие.                          | `['or', ['eq', '$context.status', 'ready'], ['eq', '$context.status', 'idle']]` |
+| `not`           | Инвертирует вложенное условие.                                                    | `['not', ['truthy', '$context.disabled']]`                                      |
+| `eq`            | Сравнивает два значения через `Object.is`.                                        | `['eq', '$context.status', 'ready']`                                            |
+| `neq`           | Совпадает, когда `Object.is` не считает значения равными.                         | `['neq', '$context.status', 'failed']`                                          |
+| `gt`            | Численно сравнивает значения через `>`.                                           | `['gt', '$context.count', 0]`                                                   |
+| `gte`           | Численно сравнивает значения через `>=`.                                          | `['gte', '$context.count', 1]`                                                  |
+| `lt`            | Численно сравнивает значения через `<`.                                           | `['lt', '$context.count', 100]`                                                 |
+| `lte`           | Численно сравнивает значения через `<=`.                                          | `['lte', '$context.count', 99]`                                                 |
+| `truthy`        | Применяет JavaScript truthiness.                                                  | `['truthy', '$context.enabled']`                                                |
+| `falsy`         | Применяет JavaScript falsiness.                                                   | `['falsy', '$context.disabled']`                                                |
+| `exists`        | Совпадает для значений, отличных от `null` и `undefined`.                         | `['exists', '$data.response']`                                                  |
+| `missing`       | Совпадает для `null` или `undefined`.                                             | `['missing', '$data.error']`                                                    |
+| `empty`         | Совпадает для пустых строк, массивов, map, set, объектов и nullish-значений.      | `['empty', '$context.items']`                                                   |
+| `notEmpty`      | Совпадает для поддерживаемых значений с размером больше нуля.                     | `['notEmpty', '$context.items']`                                                |
+| `includes`      | Проверяет вхождение в строки, массивы и set.                                      | `['includes', ['parts', 'food'], '$input.resource']`                            |
+| `typeIs`        | Совпадает с `string`, `number`, `finite-number`, `boolean`, `array` или `record`. | `['typeIs', '$input.amount', 'finite-number']`                                  |
+| `changed`       | Совпадает, когда текущее и предыдущее значения различаются по `Object.is`.        | `['changed', '$context.current', '$context.previous']`                          |
+| `cooldownReady` | Совпадает, когда предыдущей метки времени нет или задержка истекла.               | `['cooldownReady', '$context.now', '$context.lastAt', 1000]`                    |
 
 ## Пример конфигурации
 
@@ -236,9 +234,9 @@ type BehaviorRuntime = {
   variables?: {
     get(path: string): unknown
   }
-  /** @deprecated Используйте runtime.data.get. */
+  /** @deprecated Используйте runtime.data.get(path). */
   getData(path: string): unknown
-  /** @deprecated Используйте runtime.data.set. */
+  /** @deprecated Используйте runtime.data.set(path, value). */
   setData(path: string, value: unknown): void
   resolve(value: unknown): unknown
   signal: AbortSignal
