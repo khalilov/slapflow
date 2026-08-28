@@ -3,7 +3,7 @@
 Когда один и тот же сценарий запускается из формы, HTTP API, фоновой задачи или WebSocket-сообщения, его логика быстро расползается по обработчикам и сервисам. Slapflow помогает собрать её в одном явном месте — в цепочке обычных TypeScript-функций.
 
 [![Размер бандла](https://img.shields.io/bundlephobia/minzip/slapflow?label=%D1%80%D0%B0%D0%B7%D0%BC%D0%B5%D1%80%20%D0%B1%D0%B0%D0%BD%D0%B4%D0%BB%D0%B0)](https://bundlephobia.com/package/slapflow)
-[![Безопасность Socket](https://socket.dev/api/badge/npm/package/slapflow/1.0.0)](https://socket.dev/npm/package/slapflow/overview/1.0.0)
+[![Безопасность Socket](https://socket.dev/api/badge/npm/package/slapflow/1.0.2)](https://socket.dev/npm/package/slapflow/overview/1.0.2)
 
 Slapflow берёт на себя порядок выполнения, конкурентность, отмену и диагностику. Состояние предметной области и побочные эффекты по-прежнему остаются в вашем приложении.
 

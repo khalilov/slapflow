@@ -3,7 +3,7 @@
 When the same business flow can start from a form, an API route, a job, or a WebSocket message, its control flow tends to spread across the application. Slapflow gives that flow one explicit home: a chain of ordinary TypeScript functions.
 
 [![bundle size](https://img.shields.io/bundlephobia/minzip/slapflow?label=bundle%20size)](https://bundlephobia.com/package/slapflow)
-[![Socket security](https://socket.dev/api/badge/npm/package/slapflow/1.0.0)](https://socket.dev/npm/package/slapflow/overview/1.0.0)
+[![Socket security](https://socket.dev/api/badge/npm/package/slapflow/1.0.2)](https://socket.dev/npm/package/slapflow/overview/1.0.2)
 
 Slapflow takes care of orchestration, concurrency, cancellation, and diagnostics. Your application keeps ownership of its domain state and side effects.
 
