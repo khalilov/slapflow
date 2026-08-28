@@ -163,6 +163,7 @@ const config = {
 
 ## Дальше
 
+- Посмотрите на [slapflow-studio](https://github.com/khalilov/slapflow-studio) — работающее приложение, целиком построенное на Slapflow.
 - Полный контракт API, встроенные действия и условия, выражения, валидация, ограничения безопасности, транспорт и жизненный цикл описаны в [спецификации](SPEC-RU.md).
 - English documentation: [README.md](README.md) and [SPEC.md](SPEC.md).
 

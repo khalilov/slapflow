@@ -163,6 +163,7 @@ const config = {
 
 ## Where to go next
 
+- See [slapflow-studio](https://github.com/khalilov/slapflow-studio), a working application built entirely on Slapflow.
 - Read the complete [technical specification](SPEC.md) for the runner API, built-in actions and conditions, expressions, validation, safety limits, transport behavior, and lifecycle semantics.
 - Russian documentation: [README-RU.md](README-RU.md) and [SPEC-RU.md](SPEC-RU.md).
 
