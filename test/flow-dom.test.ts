@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { createChainBehavior } from '~/index'
+import { createFlow } from '~/index'
 
 type Context = Record<string, never>
 
@@ -41,7 +41,7 @@ class FakeRoot {
   }
 }
 
-describe('chain behavior DOM bindings', () => {
+describe('flow DOM bindings', () => {
   it('delegates DOM events and builds the default input', () => {
     const originalElement = globalThis.Element
     const originalHtmlElement = globalThis.HTMLElement
@@ -51,7 +51,7 @@ describe('chain behavior DOM bindings', () => {
     try {
       const root = new FakeRoot()
       const inputs: unknown[] = []
-      const behavior = createChainBehavior<Context>(
+      const chain = createFlow<Context>(
         {
           actions: {
             save: ({ input }) => {
@@ -69,7 +69,7 @@ describe('chain behavior DOM bindings', () => {
         { context: {}, root: root as unknown as Element }
       )
 
-      const started = behavior.start()
+      const started = chain.start()
       const event = root.dispatch('click', new FakeElement())
 
       assert.deepEqual(started.active, ['[dom] .save:click'])
@@ -82,7 +82,7 @@ describe('chain behavior DOM bindings', () => {
   })
 
   it('marks DOM bindings inactive when no DOM root is available', () => {
-    const behavior = createChainBehavior<Context>(
+    const chain = createFlow<Context>(
       {
         events: { '[dom] .save:click': { entrypoint: 'save' } },
         config: {
@@ -93,7 +93,7 @@ describe('chain behavior DOM bindings', () => {
       { context: {} }
     )
 
-    const started = behavior.start()
+    const started = chain.start()
 
     assert.deepEqual(started.active, [])
     assert.deepEqual(started.inactive, [{ binding: '[dom] .save:click', reason: 'dom-unavailable' }])

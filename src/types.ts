@@ -1,86 +1,86 @@
-export type BehaviorInput = Record<string, unknown>
-export type BehaviorProps = Record<string, unknown>
+export type Input = Record<string, unknown>
+export type Props = Record<string, unknown>
 
-export type BehaviorConfig = {
+export type Config = {
   version?: 1
-  strategies: Record<string, BehaviorStrategy>
+  strategies: Record<string, Strategy>
   entrypoints?: Record<string, string>
 }
 
-export type BehaviorStrategy = {
+export type Strategy = {
   fn: string
-  props?: BehaviorProps
-  when?: BehaviorConditionExpression
-  then?: BehaviorNext[]
-  catch?: BehaviorNext[]
-  mode?: BehaviorMode
+  props?: Props
+  when?: ConditionExpression
+  then?: Next[]
+  catch?: Next[]
+  mode?: Mode
   terminal?: boolean
   tags?: string[]
   description?: string
 }
 
-export type BehaviorMode = 'sequence' | 'selector' | 'parallel'
+export type Mode = 'sequence' | 'selector' | 'parallel'
 
-export type BehaviorNext =
+export type Next =
   | string
   | {
       id?: string
       strategy: string
-      props?: BehaviorProps
-      when?: BehaviorConditionExpression
+      props?: Props
+      when?: ConditionExpression
     }
 
-export type BehaviorConditionExpression = boolean | [operator: string, ...args: unknown[]]
+export type ConditionExpression = boolean | [operator: string, ...args: unknown[]]
 
-export type BehaviorAction<TContext, TPatch = unknown> = (
-  args: BehaviorActionArgs<TContext>
-) => BehaviorActionResult<TContext, TPatch> | Promise<BehaviorActionResult<TContext, TPatch>>
+export type Action<TContext, TPatch = unknown> = (
+  args: ActionArgs<TContext>
+) => ActionResult<TContext, TPatch> | Promise<ActionResult<TContext, TPatch>>
 
-export type BehaviorActionArgs<TContext> = {
+export type ActionArgs<TContext> = {
   context: TContext
-  props: BehaviorProps
-  input: BehaviorInput
+  props: Props
+  input: Input
   signal: AbortSignal
-  runtime: BehaviorRuntime
+  runtime: Runtime
 }
 
-export type BehaviorActionResult<TContext, TPatch = unknown> =
+export type ActionResult<TContext, TPatch = unknown> =
   | void
   | false
-  | BehaviorActionSuccess<TContext, TPatch>
-  | BehaviorActionSkip
-  | BehaviorActionStop<TPatch>
-  | BehaviorActionFail
+  | ActionSuccess<TContext, TPatch>
+  | ActionSkip
+  | ActionStop<TPatch>
+  | ActionFail
 
-export type BehaviorActionSuccess<TContext, TPatch> = {
+export type ActionSuccess<TContext, TPatch> = {
   type?: 'success'
   context?: TContext
   data?: Record<string, unknown>
   patch?: TPatch | TPatch[]
-  events?: BehaviorEvent[]
+  events?: SlapEvent[]
   continue?: boolean
 }
 
-export type BehaviorRuntimeBranchResult =
+export type RuntimeBranchResult =
   | { status: 'success' }
   | { status: 'skipped'; reason?: string }
   | { status: 'stopped'; reason?: string }
-  | { status: 'failed'; error: BehaviorError }
+  | { status: 'failed'; error: SlapError }
 
-export type BehaviorActionSkip = {
+export type ActionSkip = {
   type: 'skip'
   reason?: string
   data?: Record<string, unknown>
 }
 
-export type BehaviorActionStop<TPatch> = {
+export type ActionStop<TPatch> = {
   type: 'stop'
   reason?: string
   patch?: TPatch | TPatch[]
-  events?: BehaviorEvent[]
+  events?: SlapEvent[]
 }
 
-export type BehaviorActionFail = {
+export type ActionFail = {
   type: 'fail'
   reason?: string
   error?: unknown
@@ -88,16 +88,16 @@ export type BehaviorActionFail = {
   handled?: boolean
 }
 
-export type BehaviorEvent = {
+export type SlapEvent = {
   type: string
   payload?: unknown
 }
 
-export type BehaviorEventMap = Record<string, unknown>
+export type EventMap = Record<string, unknown>
 
-export type BehaviorEventName<TEvents extends object> = Extract<keyof TEvents, string>
+export type EventName<TEvents extends object> = Extract<keyof TEvents, string>
 
-export type BehaviorBusEvent<TPayload = unknown> = {
+export type BusEvent<TPayload = unknown> = {
   id: string
   topic: string
   occurredAt: number
@@ -106,47 +106,47 @@ export type BehaviorBusEvent<TPayload = unknown> = {
   serialized: string
 }
 
-export type BehaviorEventHandler<TEvents extends object, TEvent extends BehaviorEventName<TEvents>> = (
-  event: BehaviorBusEvent<TEvents[TEvent]>
+export type EventHandler<TEvents extends object, TEvent extends EventName<TEvents>> = (
+  event: BusEvent<TEvents[TEvent]>
 ) => void
 
-export type BehaviorBusErrorEvent<TEvents extends object> =
+export type BusErrorEvent<TEvents extends object> =
   | {
       type: 'serialization'
-      topic: BehaviorEventName<TEvents>
-      payload: TEvents[BehaviorEventName<TEvents>]
+      topic: EventName<TEvents>
+      payload: TEvents[EventName<TEvents>]
       origin?: string
       error: unknown
     }
   | {
       type: 'subscriber'
-      event: BehaviorBusEvent<TEvents[BehaviorEventName<TEvents>]>
+      event: BusEvent<TEvents[EventName<TEvents>]>
       error: unknown
     }
 
-export type BehaviorBusEmitOptions = {
+export type BusEmitOptions = {
   origin?: string
 }
 
-export type BehaviorBusOptions<TEvents extends object> = {
-  onError?: (event: BehaviorBusErrorEvent<TEvents>) => void
+export type BusOptions<TEvents extends object> = {
+  onError?: (event: BusErrorEvent<TEvents>) => void
 }
 
-export type BehaviorBus<TEvents extends object = BehaviorEventMap> = {
-  on<TEvent extends BehaviorEventName<TEvents>>(
+export type Bus<TEvents extends object = EventMap> = {
+  on<TEvent extends EventName<TEvents>>(
     event: TEvent,
-    handler: BehaviorEventHandler<TEvents, TEvent>
+    handler: EventHandler<TEvents, TEvent>
   ): () => void
-  off<TEvent extends BehaviorEventName<TEvents>>(event: TEvent, handler?: BehaviorEventHandler<TEvents, TEvent>): void
-  emit<TEvent extends BehaviorEventName<TEvents>>(
+  off<TEvent extends EventName<TEvents>>(event: TEvent, handler?: EventHandler<TEvents, TEvent>): void
+  emit<TEvent extends EventName<TEvents>>(
     topic: TEvent,
     payload: TEvents[TEvent],
-    options?: BehaviorBusEmitOptions
-  ): BehaviorBusEvent<TEvents[TEvent]>
-  dispatch(event: unknown): BehaviorBusEvent | undefined
+    options?: BusEmitOptions
+  ): BusEvent<TEvents[TEvent]>
+  dispatch(event: unknown): BusEvent | undefined
 }
 
-export type BehaviorWsSocket = {
+export type WSSocket = {
   readyState: number
   send(data: string): void
   close(): void
@@ -154,7 +154,7 @@ export type BehaviorWsSocket = {
   removeEventListener(type: 'open' | 'close' | 'error' | 'message', listener: EventListener): void
 }
 
-export type BehaviorRetryOptions = {
+export type RetryOptions = {
   initialDelay?: number
   maxDelay?: number
   multiplier?: number
@@ -162,140 +162,140 @@ export type BehaviorRetryOptions = {
   maxAttempts?: number
 }
 
-export type BehaviorWsRetryOptions = BehaviorRetryOptions
+export type WSRetryOptions = RetryOptions
 
-export type BehaviorWsOptions<TEvents extends object = BehaviorEventMap> = {
-  bus: BehaviorBus<TEvents>
-  createSocket: () => BehaviorWsSocket
-  inboundTopics?: BehaviorEventName<TEvents>[]
-  outboundTopics?: BehaviorEventName<TEvents>[]
+export type WSOptions<TEvents extends object = EventMap> = {
+  bus: Bus<TEvents>
+  createSocket: () => WSSocket
+  inboundTopics?: EventName<TEvents>[]
+  outboundTopics?: EventName<TEvents>[]
   origin?: string
-  retry?: BehaviorWsRetryOptions
+  retry?: WSRetryOptions
 }
 
-export type BehaviorWsStatus = 'idle' | 'connecting' | 'connected' | 'retrying' | 'stopped'
+export type WSStatus = 'idle' | 'connecting' | 'connected' | 'retrying' | 'stopped'
 
-export type BehaviorFetchResponseType = 'json' | 'text' | 'blob' | 'arrayBuffer' | 'none'
+export type FetchResponseType = 'json' | 'text' | 'blob' | 'arrayBuffer' | 'none'
 
-export type BehaviorWs = {
+export type WS = {
   start(): void
   stop(): void
   reconnect(): void
-  status(): BehaviorWsStatus
+  status(): WSStatus
 }
 
-export type BehaviorBindingEventMap = Record<string, BehaviorInput>
+export type BindingEventMap = Record<string, Input>
 
-export type BehaviorBusBindingKey<TEvents extends object> = {
-  [TEvent in BehaviorEventName<TEvents>]: TEvents[TEvent] extends BehaviorInput ? `[bus] ${TEvent}` : never
-}[BehaviorEventName<TEvents>]
+export type BusBindingKey<TEvents extends object> = {
+  [TEvent in EventName<TEvents>]: TEvents[TEvent] extends Input ? `[bus] ${TEvent}` : never
+}[EventName<TEvents>]
 
-export type BehaviorConcurrencyMode = 'parallel' | 'latest' | 'queue' | 'drop'
+export type ConcurrencyMode = 'parallel' | 'latest' | 'queue' | 'drop'
 
-export type BehaviorQueueOverflow = 'drop-oldest' | 'drop-newest'
+export type QueueOverflow = 'drop-oldest' | 'drop-newest'
 
-export type BehaviorConcurrencyOptions<TPayload = BehaviorInput> = {
-  mode?: BehaviorConcurrencyMode
+export type ConcurrencyOptions<TPayload = Input> = {
+  mode?: ConcurrencyMode
   key?: (payload: TPayload) => string
   maxQueueSize?: number
-  overflow?: BehaviorQueueOverflow
+  overflow?: QueueOverflow
 }
 
-export type BehaviorBusBinding<TPayload = BehaviorInput> = {
+export type BusBinding<TPayload = Input> = {
   entrypoint: string
   options?: {
-    concurrency?: BehaviorConcurrencyOptions<TPayload>
+    concurrency?: ConcurrencyOptions<TPayload>
   }
 }
 
-export type BehaviorBusBindings<TEvents extends object> = {
-  [TBinding in BehaviorBusBindingKey<TEvents>]?: BehaviorBusBinding<
-    TEvents[Extract<TBinding extends `[bus] ${infer TEvent}` ? TEvent : never, BehaviorEventName<TEvents>>]
+export type BusBindings<TEvents extends object> = {
+  [TBinding in BusBindingKey<TEvents>]?: BusBinding<
+    TEvents[Extract<TBinding extends `[bus] ${infer TEvent}` ? TEvent : never, EventName<TEvents>>]
   >
 }
 
-export type BehaviorDomBindingKey = `[dom] ${string}:${string}`
+export type DomBindingKey = `[dom] ${string}:${string}`
 
-export type BehaviorDomForm = Record<string, FormDataEntryValue | FormDataEntryValue[]>
+export type DomForm = Record<string, FormDataEntryValue | FormDataEntryValue[]>
 
-export type BehaviorDomInput = BehaviorInput & {
+export type DomInput = Input & {
   type: string
   value?: string
   dataset: Record<string, string>
-  form?: BehaviorDomForm
+  form?: DomForm
 }
 
-export type BehaviorDomBinding = {
+export type DomBinding = {
   entrypoint: string
   options?: {
     preventDefault?: boolean
     stopPropagation?: boolean
     capture?: boolean
     once?: boolean
-    input?: (scope: { event: Event; element: Element; defaultInput: BehaviorDomInput }) => BehaviorInput
-    concurrency?: BehaviorConcurrencyOptions<BehaviorDomInput>
+    input?: (scope: { event: Event; element: Element; defaultInput: DomInput }) => Input
+    concurrency?: ConcurrencyOptions<DomInput>
   }
 }
 
-export type BehaviorDomBindings = Partial<Record<BehaviorDomBindingKey, BehaviorDomBinding>>
+export type DomBindings = Partial<Record<DomBindingKey, DomBinding>>
 
-export type ChainBehaviorDefinition<TContext, TPatch = unknown, TEvents extends object = BehaviorBindingEventMap> = {
-  config: BehaviorConfig
-  actions?: Record<string, BehaviorAction<TContext, TPatch>>
-  conditions?: Record<string, BehaviorConditionFn<TContext>>
-  events?: BehaviorBusBindings<TEvents> & BehaviorDomBindings
+export type FlowDefinition<TContext, TPatch = unknown, TEvents extends object = BindingEventMap> = {
+  config: Config
+  actions?: Record<string, Action<TContext, TPatch>>
+  conditions?: Record<string, ConditionFn<TContext>>
+  events?: BusBindings<TEvents> & DomBindings
 }
 
-export type ChainBehaviorOptions<
+export type FlowOptions<
   TContext,
   TPatch = unknown,
-  TEvents extends object = BehaviorBindingEventMap,
-> = BehaviorRunnerOptions<TContext, TPatch> & {
+  TEvents extends object = BindingEventMap,
+> = RunnerOptions<TContext, TPatch> & {
   context: TContext | (() => TContext)
-  bus?: BehaviorBus<TEvents>
+  bus?: Bus<TEvents>
   root?: Document | Element
-  concurrency?: BehaviorConcurrencyOptions
-  onRunnerError?: (event: BehaviorRunnerErrorEvent<TContext, TPatch>) => void
+  concurrency?: ConcurrencyOptions
+  onRunnerError?: (event: RunnerErrorEvent<TContext, TPatch>) => void
 }
 
-export type BehaviorRunnerErrorEvent<TContext, TPatch = unknown> = {
-  error: BehaviorError
-  result: BehaviorRunResult<TContext, TPatch>
+export type RunnerErrorEvent<TContext, TPatch = unknown> = {
+  error: SlapError
+  result: RunResult<TContext, TPatch>
   binding: string
   entrypoint: string
   runId: string
   key?: string
 }
 
-export type BehaviorInactiveBinding = {
+export type InactiveBinding = {
   binding: string
   reason: 'unsupported-source' | 'dom-unavailable'
 }
 
-export type BehaviorStartResult = {
+export type StartResult = {
   active: string[]
-  inactive: BehaviorInactiveBinding[]
-  validation: BehaviorValidationResult
+  inactive: InactiveBinding[]
+  validation: ValidationResult
 }
 
-export type ChainBehavior<TContext, TPatch = unknown> = {
-  runner: BehaviorRunner<TContext, TPatch>
-  start(): BehaviorStartResult
+export type Flow<TContext, TPatch = unknown> = {
+  runner: Runner<TContext, TPatch>
+  start(): StartResult
   stop(options?: { force?: boolean }): void
 }
 
-export type BehaviorRunResult<TContext, TPatch = unknown> = {
+export type RunResult<TContext, TPatch = unknown> = {
   status: 'success' | 'stopped' | 'failed' | 'skipped'
   context: TContext
   data: Record<string, unknown>
   patches: TPatch[]
-  events: BehaviorEvent[]
-  error?: BehaviorError
-  trace?: BehaviorTraceEntry[]
+  events: SlapEvent[]
+  error?: SlapError
+  trace?: TraceEntry[]
   steps: number
 }
 
-export type BehaviorRuntime = {
+export type Runtime = {
   get(path: string): unknown
   set(path: string, value: unknown): void
   data: {
@@ -311,26 +311,26 @@ export type BehaviorRuntime = {
   setData(path: string, value: unknown): void
   resolve(value: unknown): unknown
   signal: AbortSignal
-  executeThen(): Promise<BehaviorRuntimeBranchResult>
-  executeCatch(): Promise<BehaviorRuntimeBranchResult | undefined>
-  emit(event: BehaviorEvent): void
+  executeThen(): Promise<RuntimeBranchResult>
+  executeCatch(): Promise<RuntimeBranchResult | undefined>
+  emit(event: SlapEvent): void
   patch(patch: unknown): void
-  stop(reason?: string): BehaviorActionStop<unknown>
-  fail(reason?: string, data?: Record<string, unknown>): BehaviorActionFail
+  stop(reason?: string): ActionStop<unknown>
+  fail(reason?: string, data?: Record<string, unknown>): ActionFail
 }
 
-export type BehaviorVariableValue =
+export type VariableValue =
   | string
   | number
   | boolean
   | bigint
   | null
-  | readonly BehaviorVariableValue[]
-  | { readonly [key: string]: BehaviorVariableValue }
+  | readonly VariableValue[]
+  | { readonly [key: string]: VariableValue }
 
-export type BehaviorVariables = Readonly<Record<string, BehaviorVariableValue>>
+export type Variables = Readonly<Record<string, VariableValue>>
 
-export type BehaviorRunnerOptions<TContext, TPatch> = {
+export type RunnerOptions<TContext, TPatch> = {
   maxStepCount?: number
   /** @deprecated Use `maxStepCount` instead. */
   maxSteps?: number
@@ -338,115 +338,115 @@ export type BehaviorRunnerOptions<TContext, TPatch> = {
   timeout?: number
   /** @deprecated Use `timeout`. It will be removed in a future major release. */
   timeoutMs?: number
-  trace?: boolean | BehaviorTraceSink
-  onError?: BehaviorErrorReporter<TContext, TPatch>
+  trace?: boolean | TraceSink
+  onError?: ErrorReporter<TContext, TPatch>
   mergeData?: (current: Record<string, unknown>, next: Record<string, unknown>) => Record<string, unknown>
-  variables?: BehaviorVariables
-  expressions?: Record<string, BehaviorExpressionOperator>
+  variables?: Variables
+  expressions?: Record<string, ExpressionOperator>
 }
 
-export type BehaviorExpressionOperator = (args: unknown[]) => unknown
+export type ExpressionOperator = (args: unknown[]) => unknown
 
-export type BehaviorRunOptions = {
+export type RunOptions = {
   signal?: AbortSignal
 }
 
-export type BehaviorTraceSink = {
-  push(entry: BehaviorTraceEntry): void
-  entries?(): BehaviorTraceEntry[]
+export type TraceSink = {
+  push(entry: TraceEntry): void
+  entries?(): TraceEntry[]
 }
 
-export type BehaviorTraceEntry = {
+export type TraceEntry = {
   step: number
   depth: number
   strategy: string
   fn: string
-  mode: BehaviorMode | undefined
+  mode: Mode | undefined
   status: 'matched' | 'skipped' | 'success' | 'stopped' | 'failed'
-  input: BehaviorInput
-  props: BehaviorProps
+  input: Input
+  props: Props
   dataBefore: Record<string, unknown>
   dataAfter: Record<string, unknown>
   durationMs: number
   reason?: string
 }
 
-export type BehaviorError = {
+export type SlapError = {
   code: string
   message: string
   strategy?: string
   fn?: string
-  stage?: BehaviorErrorStage
+  stage?: ErrorStage
   cause?: unknown
   path?: string
 }
 
-export type BehaviorErrorStage = {
+export type ErrorStage = {
   phase: 'entrypoint' | 'condition' | 'action' | 'catch' | 'limit'
   entrypoint?: string | undefined
   strategy?: string | undefined
   fn?: string | undefined
-  mode?: BehaviorMode | undefined
+  mode?: Mode | undefined
   step?: number | undefined
   depth?: number | undefined
 }
 
-export type BehaviorErrorEvent<TContext, TPatch = unknown> = {
-  error: BehaviorError
+export type SlapErrorEvent<TContext, TPatch = unknown> = {
+  error: SlapError
   context: TContext
-  input: BehaviorInput
+  input: Input
   data: Record<string, unknown>
   patches: TPatch[]
-  events: BehaviorEvent[]
-  trace?: BehaviorTraceEntry[]
+  events: SlapEvent[]
+  trace?: TraceEntry[]
 }
 
-export type BehaviorErrorReporter<TContext, TPatch = unknown> = (event: BehaviorErrorEvent<TContext, TPatch>) => void
+export type ErrorReporter<TContext, TPatch = unknown> = (event: SlapErrorEvent<TContext, TPatch>) => void
 
-export type BehaviorErrorReporterHandlers<TContext, TPatch = unknown> = {
-  report: BehaviorErrorReporter<TContext, TPatch>
+export type ErrorReporterHandlers<TContext, TPatch = unknown> = {
+  report: ErrorReporter<TContext, TPatch>
 }
 
-export type BehaviorValidationResult = {
+export type ValidationResult = {
   ok: boolean
-  errors: BehaviorValidationIssue[]
-  warnings: BehaviorValidationIssue[]
+  errors: ValidationIssue[]
+  warnings: ValidationIssue[]
 }
 
-export type BehaviorValidationIssue = {
+export type ValidationIssue = {
   code: string
   message: string
   path?: string
   strategy?: string
 }
 
-export type BehaviorConditionFn<TContext> = (
+export type ConditionFn<TContext> = (
   context: {
     context: TContext
-    input: BehaviorInput
+    input: Input
     data: Record<string, unknown>
-    runtime: Pick<BehaviorRuntime, 'resolve' | 'get' | 'data' | 'variables' | 'getData'>
+    runtime: Pick<Runtime, 'resolve' | 'get' | 'data' | 'variables' | 'getData'>
   },
   ...conditionArgs: unknown[]
 ) => boolean
 
-export type BehaviorRunner<TContext, TPatch = unknown> = {
-  registerAction(name: string, action: BehaviorAction<TContext, TPatch>): void
-  registerActions(actions: Record<string, BehaviorAction<TContext, TPatch>>): void
-  registerCondition(name: string, condition: BehaviorConditionFn<TContext>): void
-  registerConditions(conditions: Record<string, BehaviorConditionFn<TContext>>): void
-  loadConfig(config: BehaviorConfig): BehaviorValidationResult
-  validateConfig(config?: BehaviorConfig): BehaviorValidationResult
+export type Runner<TContext, TPatch = unknown> = {
+  registerAction(name: string, action: Action<TContext, TPatch>): void
+  registerActions(actions: Record<string, Action<TContext, TPatch>>): void
+  registerCondition(name: string, condition: ConditionFn<TContext>): void
+  registerConditions(conditions: Record<string, ConditionFn<TContext>>): void
+  loadConfig(config: Config): ValidationResult
+  validateConfig(config?: Config): ValidationResult
   run(
     entrypoint: string,
     context: TContext,
-    input?: BehaviorInput,
-    options?: BehaviorRunOptions
-  ): Promise<BehaviorRunResult<TContext, TPatch>>
+    input?: Input,
+    options?: RunOptions
+  ): Promise<RunResult<TContext, TPatch>>
   runSync(
     entrypoint: string,
     context: TContext,
-    input?: BehaviorInput,
-    options?: BehaviorRunOptions
-  ): BehaviorRunResult<TContext, TPatch>
+    input?: Input,
+    options?: RunOptions
+  ): RunResult<TContext, TPatch>
 }

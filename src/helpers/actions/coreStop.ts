@@ -1,7 +1,7 @@
-import { type BehaviorActionArgs, type BehaviorActionResult, type BehaviorActionStop } from '~/types'
+import { type ActionArgs, type ActionResult, type ActionStop } from '~/types'
 
 export const coreStop = <TContext, TPatch>({
   props,
   runtime,
-}: BehaviorActionArgs<TContext>): BehaviorActionResult<TContext, TPatch> =>
-  runtime.stop(String(props.reason ?? 'stopped')) as BehaviorActionStop<TPatch>
+}: ActionArgs<TContext>): ActionResult<TContext, TPatch> =>
+  runtime.stop(String(props.reason ?? 'stopped')) as ActionStop<TPatch>

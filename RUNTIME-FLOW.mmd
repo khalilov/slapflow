@@ -1,18 +1,18 @@
 flowchart LR
-  DOM["DOM event"] --> CFB["CFB binding"]
+  DOM["DOM event"] --> Slapflow["Slapflow binding"]
   SYNTHETIC["Synthetic event<br/>API, timer, worker"] --> BUS["PubSubBehavior"]
   TRANSPORT["WebSocket transport"] --> WS["WebSocket bridge"]
   WS --> BUS
   BUS --> WS
   WS --> TRANSPORT
-  BUS --> CFB
+  BUS --> Slapflow
 
-  CFB --> CONCURRENCY["Concurrency lane"]
+  Slapflow --> CONCURRENCY["Concurrency lane"]
   CONCURRENCY --> RUNNER["Behavior runner"]
   RUNNER --> CONDITIONS["Conditions"]
   CONDITIONS --> ACTIONS["Actions"]
   ACTIONS --> RESULT["Run result"]
 
-  RUNNER --> DIAGNOSTICS["cfb.* diagnostics"]
+  RUNNER --> DIAGNOSTICS["slapflow.* diagnostics"]
   DIAGNOSTICS --> BUS
   RESULT --> DIAGNOSTICS

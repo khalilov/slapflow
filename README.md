@@ -1,11 +1,11 @@
-# CFB — Chain Functions Behavior
+# Slapflow
 
-When the same business flow can start from a form, an API route, a job, or a WebSocket message, its control flow tends to spread across the application. CFB gives that flow one explicit home: a chain of ordinary TypeScript functions.
+When the same business flow can start from a form, an API route, a job, or a WebSocket message, its control flow tends to spread across the application. Slapflow gives that flow one explicit home: a chain of ordinary TypeScript functions.
 
-[![bundle size](https://img.shields.io/bundlephobia/minzip/chain-functions-behavior?label=bundle%20size)](https://bundlephobia.com/package/chain-functions-behavior)
-[![Socket security](https://socket.dev/api/badge/npm/package/chain-functions-behavior/1.6.1)](https://socket.dev/npm/package/chain-functions-behavior/overview/1.6.1)
+[![bundle size](https://img.shields.io/bundlephobia/minzip/slapflow?label=bundle%20size)](https://bundlephobia.com/package/slapflow)
+[![Socket security](https://socket.dev/api/badge/npm/package/slapflow/1.0.0)](https://socket.dev/npm/package/slapflow/overview/1.0.0)
 
-CFB takes care of orchestration, concurrency, cancellation, and diagnostics. Your application keeps ownership of its domain state and side effects.
+Slapflow takes care of orchestration, concurrency, cancellation, and diagnostics. Your application keeps ownership of its domain state and side effects.
 
 ## Why use it?
 
@@ -17,7 +17,7 @@ CFB takes care of orchestration, concurrency, cancellation, and diagnostics. You
 ## Installation
 
 ```bash
-npm install chain-functions-behavior
+npm install slapflow
 ```
 
 ## Quick start
@@ -25,7 +25,7 @@ npm install chain-functions-behavior
 This example handles an order submission from a typed event bus. The `latest` mode cancels a previous submission for the same order when a newer event arrives.
 
 ```ts
-import { createChainBehavior, createPubSubBehavior } from 'chain-functions-behavior'
+import { createFlow, createPubSub } from 'slapflow'
 
 type Context = {
   orders: Map<string, { id: string; status: 'draft' | 'submitted' }>
@@ -35,12 +35,12 @@ type Events = {
   'order.submit': { orderId: string }
 }
 
-const bus = createPubSubBehavior<Events>()
+const bus = createPubSub<Events>()
 const context: Context = {
   orders: new Map([['order-1', { id: 'order-1', status: 'draft' }]]),
 }
 
-const behavior = createChainBehavior<Context, unknown, Events>(
+const flow = createFlow<Context, unknown, Events>(
   {
     events: {
       '[bus] order.submit': {
@@ -70,7 +70,7 @@ const behavior = createChainBehavior<Context, unknown, Events>(
   { bus, context }
 )
 
-behavior.start()
+flow.start()
 bus.emit('order.submit', { orderId: 'order-1' }, { origin: 'api' })
 ```
 
@@ -150,9 +150,7 @@ const config = {
 }
 ```
 
-[View the execution flow](examples/compound-conditions.mmd).
-
-## What CFB provides
+## What Slapflow provides
 
 - Declarative strategies, conditions, error branches, and entrypoints.
 - A broad set of [built-in conditions](SPEC.md#built-in-conditions) for comparisons, type checks, collections, and compound logic.
@@ -160,12 +158,11 @@ const config = {
 - `parallel`, `latest`, `queue`, and `drop` concurrency modes with per-entity lanes.
 - A WebSocket bridge for forwarding selected bus events.
 - `core.fetch` with response parsing, cancellation, and retry backoff.
-- Normalized results, execution trace, validation, and lifecycle diagnostics such as `cfb.run.started` and `cfb.run.failed`.
+- Normalized results, execution trace, validation, and lifecycle diagnostics such as `slapflow.run.started` and `slapflow.run.failed`.
 - Runtime variables for configuration values, templates, and expressions.
 
 ## Where to go next
 
-- Explore the runnable [client/server Todo app example](examples/todo-app), which sends a form request to a server CFB runtime for validation and in-memory storage.
 - Read the complete [technical specification](SPEC.md) for the runner API, built-in actions and conditions, expressions, validation, safety limits, transport behavior, and lifecycle semantics.
 - Russian documentation: [README-RU.md](README-RU.md) and [SPEC-RU.md](SPEC-RU.md).
 

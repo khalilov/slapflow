@@ -127,7 +127,7 @@ describe('built-in conditions', () => {
     assertMatches(['not', ['truthy', 'x']], false)
   })
 
-  it('returns a behavior error for unknown condition operators', () => {
+  it('returns an error for unknown condition operators', () => {
     const result = evaluateCondition(['unknown'], createConditionsRegistry<Ctx>(), createScope())
 
     assert.equal(result.ok, false)

@@ -1,9 +1,9 @@
-import { type BehaviorActionArgs, type BehaviorActionResult } from '~/types'
+import { type ActionArgs, type ActionResult } from '~/types'
 
 export const corePatch = <TContext, TPatch>({
   props,
   runtime,
-}: BehaviorActionArgs<TContext>): BehaviorActionResult<TContext, TPatch> => {
+}: ActionArgs<TContext>): ActionResult<TContext, TPatch> => {
   if ('patch' in props) {
     runtime.patch(props.patch)
   }

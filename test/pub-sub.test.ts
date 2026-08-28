@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { createPubSubBehavior, PubSubBehavior, type BehaviorBus } from '~/index'
+import { createPubSub, PubSub, type Bus } from '~/index'
 
 type AppEvents = {
   'auth.signed-in': { userId: string }
   'order.created': { orderId: string }
 }
 
-describe('pub/sub behavior', () => {
+describe('pub/sub', () => {
   it('emits typed payloads to subscribers in registration order', () => {
-    const bus: BehaviorBus<AppEvents> = createPubSubBehavior<AppEvents>()
+    const bus: Bus<AppEvents> = createPubSub<AppEvents>()
     const received: string[] = []
 
     bus.on('order.created', ({ parsed }) => received.push(`first:${parsed.orderId}`))
@@ -20,7 +20,7 @@ describe('pub/sub behavior', () => {
   })
 
   it('unsubscribes a handler through the function returned by on', () => {
-    const bus = createPubSubBehavior<AppEvents>()
+    const bus = createPubSub<AppEvents>()
     const received: string[] = []
     const unsubscribe = bus.on('auth.signed-in', ({ parsed }) => received.push(parsed.userId))
 
@@ -32,7 +32,7 @@ describe('pub/sub behavior', () => {
   })
 
   it('removes one handler or every handler for an event', () => {
-    const bus = createPubSubBehavior<AppEvents>()
+    const bus = createPubSub<AppEvents>()
     const received: string[] = []
     const first = ({ parsed }: { parsed: AppEvents['auth.signed-in'] }) => received.push(`first:${parsed.userId}`)
     const second = ({ parsed }: { parsed: AppEvents['auth.signed-in'] }) => received.push(`second:${parsed.userId}`)
@@ -50,7 +50,7 @@ describe('pub/sub behavior', () => {
   it('isolates subscriber errors and reports them without skipping remaining handlers', () => {
     const errors: string[] = []
     const received: string[] = []
-    const bus = createPubSubBehavior<AppEvents>({
+    const bus = createPubSub<AppEvents>({
       onError: (event) => {
         if (event.type === 'subscriber') {
           errors.push(`${event.event.topic}:${String(event.error)}`)
@@ -70,16 +70,16 @@ describe('pub/sub behavior', () => {
 
   it('exports a shared default bus', () => {
     const received: string[] = []
-    const unsubscribe = PubSubBehavior.on('test.pub-sub.singleton', ({ parsed }) => received.push(String(parsed)))
+    const unsubscribe = PubSub.on('test.pub-sub.singleton', ({ parsed }) => received.push(String(parsed)))
 
-    PubSubBehavior.emit('test.pub-sub.singleton', 'ready')
+    PubSub.emit('test.pub-sub.singleton', 'ready')
     unsubscribe()
 
     assert.deepEqual(received, ['ready'])
   })
 
   it('creates one event envelope with origin and serialized payload', () => {
-    const bus = createPubSubBehavior<AppEvents>()
+    const bus = createPubSub<AppEvents>()
     const event = bus.emit('order.created', { orderId: 'order-1' }, { origin: 'worker' })
 
     assert.equal(event.id.length > 0, true)
@@ -93,7 +93,7 @@ describe('pub/sub behavior', () => {
   it('publishes an error payload when serialization fails', () => {
     const errors: unknown[] = []
     const received: unknown[] = []
-    const bus = createPubSubBehavior<Record<string, unknown>>({
+    const bus = createPubSub<Record<string, unknown>>({
       onError: (event) => {
         if (event.type === 'serialization') {
           errors.push(event.error)
@@ -113,7 +113,7 @@ describe('pub/sub behavior', () => {
   })
 
   it('dispatches a validated external event without changing its envelope', () => {
-    const bus = createPubSubBehavior<AppEvents>()
+    const bus = createPubSub<AppEvents>()
     const received: unknown[] = []
     const event = {
       id: 'remote-1',

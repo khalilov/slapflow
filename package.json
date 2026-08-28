@@ -1,7 +1,7 @@
 {
-  "name": "chain-functions-behavior",
-  "version": "1.7.0",
-  "description": "Chain functions behaviour",
+  "name": "slapflow",
+  "version": "1.0.0",
+  "description": "Chain actions behavior runtime",
   "license": "ISC",
   "author": "Sergey Khalilov",
   "keywords": [
@@ -13,12 +13,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/khalilov/chain-functions-behavior.git"
+    "url": "git+https://github.com/khalilov/slapflow.git"
   },
   "bugs": {
-    "url": "https://github.com/khalilov/chain-functions-behavior/issues"
+    "url": "https://github.com/khalilov/slapflow/issues"
   },
-  "homepage": "https://github.com/khalilov/chain-functions-behavior#readme",
+  "homepage": "https://github.com/khalilov/slapflow#readme",
   "engines": {
     "node": ">=18"
   },
@@ -38,19 +38,10 @@
     "SPEC.md",
     "SPEC-RU.md",
     "RUNTIME-FLOW.mmd",
-    "examples/*.ts",
-    "examples/*.mmd",
-    "examples/todo-app/README.md",
-    "examples/todo-app/build.ts",
-    "examples/todo-app/bun.lock",
-    "examples/todo-app/package.json",
-    "examples/todo-app/server.ts",
-    "examples/todo-app/src",
     "!dist/**/*.js.map",
     "!dist/**/*.d.ts.map"
   ],
   "directories": {
-    "example": "examples",
     "test": "test"
   },
   "scripts": {

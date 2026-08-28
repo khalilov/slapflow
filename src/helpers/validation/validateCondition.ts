@@ -1,4 +1,4 @@
-import { type BehaviorValidationIssue } from '~/types'
+import { type ValidationIssue } from '~/types'
 import { type RegistryReader } from '~/helpers/validation/registryReader'
 import { controlConditions } from '~/helpers/validation/validationConstants'
 import { validateRefs } from '~/helpers/validation/validateRefs'
@@ -8,7 +8,7 @@ export const validateCondition = (
   strategy: string,
   path: string,
   conditionsRegistry: RegistryReader,
-  errors: BehaviorValidationIssue[]
+  errors: ValidationIssue[]
 ): void => {
   if (expression === undefined || typeof expression === 'boolean') {
     return

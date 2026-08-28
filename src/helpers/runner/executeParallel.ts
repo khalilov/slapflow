@@ -1,4 +1,4 @@
-import { type BehaviorNext } from '~/types'
+import { type Next } from '~/types'
 import { executeNext } from '~/helpers/runner/executeNext'
 import { cloneParallelValue } from '~/helpers/runner/cloneParallelValue'
 import { executeSequence } from '~/helpers/runner/executeSequence'
@@ -7,7 +7,7 @@ import { skippedResult } from '~/helpers/runner/skippedResult'
 import { successResult } from '~/helpers/runner/successResult'
 
 export const executeParallel = <TContext, TPatch>(
-  items: BehaviorNext[],
+  items: Next[],
   depth: number,
   state: RunState<TContext, TPatch>,
   environment: RunnerEnvironment<TContext, TPatch>

@@ -1,25 +1,32 @@
 import {
-  type BehaviorBindingEventMap,
-  type BehaviorBus,
-  type BehaviorBusBinding,
-  type BehaviorBusBindingKey,
-  type BehaviorConcurrencyOptions,
-  type BehaviorDomBinding,
-  type BehaviorDomBindingKey,
-  type BehaviorDomForm,
-  type BehaviorDomInput,
-  type BehaviorEventName,
-  type BehaviorEventMap,
-  type BehaviorInput,
-  type BehaviorStartResult,
-  type ChainBehavior,
-  type ChainBehaviorDefinition,
-  type ChainBehaviorOptions,
+  type BindingEventMap,
+  type Bus,
+  type BusBinding,
+  type BusBindingKey,
+  type ConcurrencyOptions,
+  type DomBinding,
+  type DomBindingKey,
+  type DomForm,
+  type DomInput,
+  type EventName,
+  type EventMap,
+  type Input,
+  type StartResult,
+  type Flow,
+  type FlowDefinition,
+  type FlowOptions,
 } from '~/types'
-import { createBehaviorRunner } from '~/runner'
-import { PubSubBehavior } from '~/pubSub'
-import { isBehaviorInput } from '~/helpers/chain/isBehaviorInput'
+import { createRunner } from '~/runner'
+import { PubSub } from '~/pubSub'
+import { isInput } from '~/helpers/chain/isInput'
 import { parseDomBinding } from '~/helpers/chain/parseDomBinding'
+import { on } from 'node:cluster'
+import { clear, error } from 'node:console'
+import { get } from 'node:http'
+import { abort } from 'node:process'
+import { push } from 'node:stream/iter'
+import { aborted } from 'node:util'
+import { set } from 'objwalk'
 
 const busBindingPrefix = '[bus] '
 const domBindingPrefix = '[dom] '
@@ -32,20 +39,20 @@ type ActiveRun = {
 
 type RunLane = {
   active?: ActiveRun | undefined
-  queue: BehaviorInput[]
+  queue: Input[]
 }
 
 type SchedulableBinding = {
   entrypoint: string
-  options?: { concurrency?: BehaviorConcurrencyOptions<any> }
+  options?: { concurrency?: ConcurrencyOptions<any> }
 }
 
-export const createChainBehavior = <TContext, TPatch = unknown, TEvents extends object = BehaviorBindingEventMap>(
-  definition: ChainBehaviorDefinition<TContext, TPatch, TEvents>,
-  options: ChainBehaviorOptions<TContext, TPatch, TEvents>
-): ChainBehavior<TContext, TPatch> => {
-  const runner = createBehaviorRunner<TContext, TPatch>(options)
-  const bus = options.bus ?? (PubSubBehavior as BehaviorBus<TEvents>)
+export const createFlow = <TContext, TPatch = unknown, TEvents extends object = BindingEventMap>(
+  definition: FlowDefinition<TContext, TPatch, TEvents>,
+  options: FlowOptions<TContext, TPatch, TEvents>
+): Flow<TContext, TPatch> => {
+  const runner = createRunner<TContext, TPatch>(options)
+  const bus = options.bus ?? (PubSub as Bus<TEvents>)
   const unsubscribers = new Set<() => void>()
   const lanes = new Map<string, RunLane>()
   const activeRuns = new Set<ActiveRun>()
@@ -55,13 +62,13 @@ export const createChainBehavior = <TContext, TPatch = unknown, TEvents extends 
   runner.registerConditions(definition.conditions ?? {})
 
   const emitDiagnostic = (event: string, payload: Record<string, unknown>): void => {
-    ;(bus as BehaviorBus<BehaviorEventMap>).emit(event, payload)
+    ;(bus as Bus<EventMap>).emit(event, payload)
   }
 
   const clearQueuedRuns = (): void => {
     for (const [binding, lane] of lanes) {
       for (const input of lane.queue) {
-        emitDiagnostic('cfb.run.dropped', { binding, input, reason: 'behavior-stopped' })
+        emitDiagnostic('slapflow.run.dropped', { binding, input, reason: 'chain-stopped' })
       }
       lane.queue = []
       if (!lane.active) {
@@ -86,13 +93,13 @@ export const createChainBehavior = <TContext, TPatch = unknown, TEvents extends 
   const getContext = (): TContext =>
     typeof options.context === 'function' ? (options.context as () => TContext)() : options.context
 
-  const getConcurrency = (target: SchedulableBinding): BehaviorConcurrencyOptions =>
+  const getConcurrency = (target: SchedulableBinding): ConcurrencyOptions =>
     target.options?.concurrency ?? options.concurrency ?? {}
 
   const startRun = (
     binding: string,
     target: SchedulableBinding,
-    input: BehaviorInput,
+    input: Input,
     key?: string,
     lane?: RunLane,
     laneKey?: string
@@ -105,7 +112,7 @@ export const createChainBehavior = <TContext, TPatch = unknown, TEvents extends 
       lane.active = run
     }
 
-    emitDiagnostic('cfb.run.started', { binding, entrypoint: target.entrypoint, key, runId: run.id })
+    emitDiagnostic('slapflow.run.started', { binding, entrypoint: target.entrypoint, key, runId: run.id })
 
     void runner
       .run(target.entrypoint, getContext(), input, { signal: controller.signal })
@@ -113,9 +120,9 @@ export const createChainBehavior = <TContext, TPatch = unknown, TEvents extends 
         const payload = { binding, entrypoint: target.entrypoint, key, runId: run.id }
 
         if (controller.signal.aborted) {
-          emitDiagnostic('cfb.run.cancelled', payload)
+          emitDiagnostic('slapflow.run.cancelled', payload)
         } else if (result.status === 'failed') {
-          emitDiagnostic('cfb.run.failed', { ...payload, error: result.error })
+          emitDiagnostic('slapflow.run.failed', { ...payload, error: result.error })
           options.onRunnerError?.({
             error: result.error as NonNullable<typeof result.error>,
             result,
@@ -125,13 +132,13 @@ export const createChainBehavior = <TContext, TPatch = unknown, TEvents extends 
             ...(key === undefined ? {} : { key }),
           })
         } else {
-          emitDiagnostic('cfb.run.finished', { ...payload, status: result.status })
+          emitDiagnostic('slapflow.run.finished', { ...payload, status: result.status })
         }
       })
       .catch((error) => {
         const payload = { binding, entrypoint: target.entrypoint, key, runId: run.id }
 
-        emitDiagnostic(controller.signal.aborted ? 'cfb.run.cancelled' : 'cfb.run.failed', {
+        emitDiagnostic(controller.signal.aborted ? 'slapflow.run.cancelled' : 'slapflow.run.failed', {
           ...payload,
           ...(controller.signal.aborted ? {} : { error }),
         })
@@ -151,7 +158,7 @@ export const createChainBehavior = <TContext, TPatch = unknown, TEvents extends 
       })
   }
 
-  const scheduleRun = (binding: string, target: SchedulableBinding, input: BehaviorInput): void => {
+  const scheduleRun = (binding: string, target: SchedulableBinding, input: Input): void => {
     const concurrency = getConcurrency(target)
     const mode = concurrency.mode ?? 'parallel'
 
@@ -169,18 +176,18 @@ export const createChainBehavior = <TContext, TPatch = unknown, TEvents extends 
         lane.active.controller.abort()
         startRun(binding, target, input, key, lane, laneKey)
       } else if (mode === 'drop') {
-        emitDiagnostic('cfb.run.dropped', { binding, entrypoint: target.entrypoint, key, reason: 'run-active' })
+        emitDiagnostic('slapflow.run.dropped', { binding, entrypoint: target.entrypoint, key, reason: 'run-active' })
       } else {
         const maxQueueSize = concurrency.maxQueueSize ?? defaultMaxQueueSize
         const queueIsFull = lane.queue.length >= maxQueueSize
         const dropsOldest = concurrency.overflow === 'drop-oldest'
 
         if (queueIsFull) {
-          emitDiagnostic('cfb.queue.overflow', { binding, entrypoint: target.entrypoint, key, maxQueueSize })
+          emitDiagnostic('slapflow.queue.overflow', { binding, entrypoint: target.entrypoint, key, maxQueueSize })
           if (dropsOldest) {
             const dropped = lane.queue.shift()
 
-            emitDiagnostic('cfb.run.dropped', {
+            emitDiagnostic('slapflow.run.dropped', {
               binding,
               entrypoint: target.entrypoint,
               key,
@@ -188,7 +195,12 @@ export const createChainBehavior = <TContext, TPatch = unknown, TEvents extends 
               ...(dropped ? { input: dropped } : {}),
             })
           } else {
-            emitDiagnostic('cfb.run.dropped', { binding, entrypoint: target.entrypoint, key, reason: 'queue-overflow' })
+            emitDiagnostic('slapflow.run.dropped', {
+              binding,
+              entrypoint: target.entrypoint,
+              key,
+              reason: 'queue-overflow',
+            })
           }
         }
         if (!queueIsFull || dropsOldest) {
@@ -198,13 +210,13 @@ export const createChainBehavior = <TContext, TPatch = unknown, TEvents extends 
     }
   }
 
-  const subscribeBusBinding = (binding: string, target: BehaviorBusBinding): void => {
-    const event = binding.slice(busBindingPrefix.length) as BehaviorEventName<TEvents>
+  const subscribeBusBinding = (binding: string, target: BusBinding): void => {
+    const event = binding.slice(busBindingPrefix.length) as EventName<TEvents>
     const unsubscribe = bus.on(event, (busEvent) => {
-      if (isBehaviorInput(busEvent.parsed)) {
+      if (isInput(busEvent.parsed)) {
         scheduleRun(binding, target, busEvent.parsed)
       } else {
-        emitDiagnostic('cfb.run.dropped', {
+        emitDiagnostic('slapflow.run.dropped', {
           binding,
           entrypoint: target.entrypoint,
           reason: 'input-not-object',
@@ -215,14 +227,14 @@ export const createChainBehavior = <TContext, TPatch = unknown, TEvents extends 
     unsubscribers.add(unsubscribe)
   }
 
-  const collectForm = (element: Element): BehaviorDomForm | undefined => {
+  const collectForm = (element: Element): DomForm | undefined => {
     const form =
       typeof HTMLFormElement !== 'undefined' && element instanceof HTMLFormElement ? element : element.closest('form')
     if (!form) {
       return undefined
     }
 
-    const values: BehaviorDomForm = {}
+    const values: DomForm = {}
     for (const [name, value] of new FormData(form)) {
       const current = values[name]
 
@@ -231,7 +243,7 @@ export const createChainBehavior = <TContext, TPatch = unknown, TEvents extends 
     return values
   }
 
-  const createDomInput = (event: Event, element: Element): BehaviorDomInput => {
+  const createDomInput = (event: Event, element: Element): DomInput => {
     const value = 'value' in element && typeof element.value === 'string' ? element.value : undefined
     const form = collectForm(element)
     const dataset: Record<string, string> = {}
@@ -250,7 +262,7 @@ export const createChainBehavior = <TContext, TPatch = unknown, TEvents extends 
     }
   }
 
-  const subscribeDomBinding = (binding: string, target: BehaviorDomBinding): boolean => {
+  const subscribeDomBinding = (binding: string, target: DomBinding): boolean => {
     const parsed = parseDomBinding(binding, domBindingPrefix)
     const root = options.root ?? (typeof document === 'undefined' ? undefined : document)
     let active = false
@@ -297,22 +309,22 @@ export const createChainBehavior = <TContext, TPatch = unknown, TEvents extends 
     return active
   }
 
-  const start = (): BehaviorStartResult => {
+  const start = (): StartResult => {
     stop()
 
     const validation = runner.loadConfig(definition.config)
     const active: string[] = []
-    const inactive: BehaviorStartResult['inactive'] = []
+    const inactive: StartResult['inactive'] = []
 
     if (validation.ok) {
-      const bindings = Object.entries(definition.events ?? {}) as [string, BehaviorBusBinding | BehaviorDomBinding][]
+      const bindings = Object.entries(definition.events ?? {}) as [string, BusBinding | DomBinding][]
 
       for (const [binding, target] of bindings) {
         if (binding.startsWith(busBindingPrefix)) {
-          subscribeBusBinding(binding as BehaviorBusBindingKey<TEvents>, target as BehaviorBusBinding)
+          subscribeBusBinding(binding as BusBindingKey<TEvents>, target as BusBinding)
           active.push(binding)
         } else if (binding.startsWith(domBindingPrefix)) {
-          if (subscribeDomBinding(binding as BehaviorDomBindingKey, target as BehaviorDomBinding)) {
+          if (subscribeDomBinding(binding as DomBindingKey, target as DomBinding)) {
             active.push(binding)
           } else {
             inactive.push({ binding, reason: 'dom-unavailable' })

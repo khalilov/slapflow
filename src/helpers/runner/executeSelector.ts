@@ -1,10 +1,10 @@
-import { type BehaviorNext } from '~/types'
+import { type Next } from '~/types'
 import { executeNext } from '~/helpers/runner/executeNext'
 import { isPromiseLike } from '~/helpers/runner/isPromiseLike'
 import { type Normalized, type RunState, type RunnerEnvironment } from '~/helpers/runner/runnerTypes'
 
 export const executeSelector = <TContext, TPatch>(
-  items: BehaviorNext[],
+  items: Next[],
   depth: number,
   state: RunState<TContext, TPatch>,
   environment: RunnerEnvironment<TContext, TPatch>

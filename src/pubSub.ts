@@ -1,31 +1,31 @@
 import {
-  type BehaviorBus,
-  type BehaviorBusErrorEvent,
-  type BehaviorBusEvent,
-  type BehaviorBusEmitOptions,
-  type BehaviorBusOptions,
-  type BehaviorEventHandler,
-  type BehaviorEventMap,
-  type BehaviorEventName,
+  type Bus,
+  type BusErrorEvent,
+  type BusEvent,
+  type BusEmitOptions,
+  type BusOptions,
+  type EventHandler,
+  type EventMap,
+  type EventName,
 } from '~/types'
 import { createId } from '~/helpers/ids/createId'
-import { isBehaviorBusEvent } from '~/helpers/pubSub/isBehaviorBusEvent'
+import { isBusEvent } from '~/helpers/pubSub/isBusEvent'
 import { serializeError } from '~/helpers/pubSub/serializeError'
 
-export const createPubSubBehavior = <TEvents extends object = BehaviorEventMap>(
-  options: BehaviorBusOptions<TEvents> = {}
-): BehaviorBus<TEvents> => {
-  const subscribers = new Map<string, Set<(event: BehaviorBusEvent<unknown>) => void>>()
+export const createPubSub = <TEvents extends object = EventMap>(
+  options: BusOptions<TEvents> = {}
+): Bus<TEvents> => {
+  const subscribers = new Map<string, Set<(event: BusEvent<unknown>) => void>>()
 
-  const dispatch = (event: unknown): BehaviorBusEvent | undefined => {
-    let dispatchedEvent: BehaviorBusEvent | undefined
+  const dispatch = (event: unknown): BusEvent | undefined => {
+    let dispatchedEvent: BusEvent | undefined
 
-    if (!isBehaviorBusEvent(event)) {
+    if (!isBusEvent(event)) {
       options.onError?.({
         type: 'serialization',
-        topic: 'unknown' as BehaviorEventName<TEvents>,
-        payload: event as TEvents[BehaviorEventName<TEvents>],
-        error: new Error('Invalid behavior bus event'),
+        topic: 'unknown' as EventName<TEvents>,
+        payload: event as TEvents[EventName<TEvents>],
+        error: new Error('Invalid bus event'),
       })
     } else {
       const handlers = subscribers.get(event.topic)
@@ -33,9 +33,9 @@ export const createPubSubBehavior = <TEvents extends object = BehaviorEventMap>(
       if (handlers) {
         for (const handler of [...handlers]) {
           try {
-            handler(event as BehaviorBusEvent<unknown>)
+            handler(event as BusEvent<unknown>)
           } catch (error) {
-            options.onError?.({ type: 'subscriber', event, error } as BehaviorBusErrorEvent<TEvents>)
+            options.onError?.({ type: 'subscriber', event, error } as BusErrorEvent<TEvents>)
           }
         }
       }
@@ -45,12 +45,12 @@ export const createPubSubBehavior = <TEvents extends object = BehaviorEventMap>(
     return dispatchedEvent
   }
 
-  const on = <TEvent extends BehaviorEventName<TEvents>>(
+  const on = <TEvent extends EventName<TEvents>>(
     event: TEvent,
-    handler: BehaviorEventHandler<TEvents, TEvent>
+    handler: EventHandler<TEvents, TEvent>
   ) => {
-    const handlers = subscribers.get(event) ?? new Set<(event: BehaviorBusEvent<unknown>) => void>()
-    const listener = handler as (event: BehaviorBusEvent<unknown>) => void
+    const handlers = subscribers.get(event) ?? new Set<(event: BusEvent<unknown>) => void>()
+    const listener = handler as (event: BusEvent<unknown>) => void
 
     handlers.add(listener)
     subscribers.set(event, handlers)
@@ -58,15 +58,15 @@ export const createPubSubBehavior = <TEvents extends object = BehaviorEventMap>(
     return () => off(event, handler)
   }
 
-  const off = <TEvent extends BehaviorEventName<TEvents>>(
+  const off = <TEvent extends EventName<TEvents>>(
     event: TEvent,
-    handler?: BehaviorEventHandler<TEvents, TEvent>
+    handler?: EventHandler<TEvents, TEvent>
   ) => {
     if (handler) {
       const handlers = subscribers.get(event)
 
       if (handlers) {
-        handlers.delete(handler as (event: BehaviorBusEvent<unknown>) => void)
+        handlers.delete(handler as (event: BusEvent<unknown>) => void)
         if (handlers.size === 0) {
           subscribers.delete(event)
         }
@@ -76,12 +76,12 @@ export const createPubSubBehavior = <TEvents extends object = BehaviorEventMap>(
     }
   }
 
-  const emit = <TEvent extends BehaviorEventName<TEvents>>(
+  const emit = <TEvent extends EventName<TEvents>>(
     topic: TEvent,
     payload: TEvents[TEvent],
-    emitOptions: BehaviorBusEmitOptions = {}
-  ): BehaviorBusEvent<TEvents[TEvent]> => {
-    let event: BehaviorBusEvent<TEvents[TEvent]>
+    emitOptions: BusEmitOptions = {}
+  ): BusEvent<TEvents[TEvent]> => {
+    let event: BusEvent<TEvents[TEvent]>
 
     try {
       const serialized = JSON.stringify(payload)
@@ -112,13 +112,13 @@ export const createPubSubBehavior = <TEvents extends object = BehaviorEventMap>(
         payload,
         ...(emitOptions.origin ? { origin: emitOptions.origin } : {}),
         error,
-      } as BehaviorBusErrorEvent<TEvents>)
+      } as BusErrorEvent<TEvents>)
     }
 
-    return dispatch(event) as BehaviorBusEvent<TEvents[TEvent]>
+    return dispatch(event) as BusEvent<TEvents[TEvent]>
   }
 
   return { on, off, emit, dispatch }
 }
 
-export const PubSubBehavior = createPubSubBehavior()
+export const PubSub = createPubSub()

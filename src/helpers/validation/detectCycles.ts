@@ -1,10 +1,10 @@
-import { type BehaviorConfig, type BehaviorValidationIssue } from '~/types'
+import { type Config, type ValidationIssue } from '~/types'
 import { getNextTarget } from '~/helpers/validation/getNextTarget'
 
 export const detectCycles = (
-  config: BehaviorConfig,
-  errors: BehaviorValidationIssue[],
-  warnings: BehaviorValidationIssue[]
+  config: Config,
+  errors: ValidationIssue[],
+  warnings: ValidationIssue[]
 ): void => {
   const visiting = new Set<string>()
   const visited = new Set<string>()

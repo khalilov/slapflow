@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { createBehaviorRunner } from '~/index'
+import { createRunner } from '~/runner'
 import { createActionsRegistry } from '~/registry/actions'
 import { createConditionsRegistry } from '~/registry/conditions'
-import { type BehaviorConfig } from '~/types'
+import { type Config } from '~/types'
 
 type Ctx = {
   value?: number
@@ -54,8 +54,8 @@ describe('registry', () => {
   })
 
   it('allows a runner to override a built-in action without affecting another runner', async () => {
-    const first = createBehaviorRunner<Ctx, string>()
-    const second = createBehaviorRunner<Ctx, string>()
+    const first = createRunner<Ctx, string>()
+    const second = createRunner<Ctx, string>()
 
     first.registerAction('core.patch', () => ({ patch: 'override' }))
     first.loadConfig({ strategies: { root: { fn: 'core.patch', props: { patch: 'builtin' } } } })
@@ -66,9 +66,9 @@ describe('registry', () => {
   })
 
   it('allows a runner to override a built-in condition without affecting another runner', async () => {
-    const first = createBehaviorRunner<Ctx, string>()
-    const second = createBehaviorRunner<Ctx, string>()
-    const config: BehaviorConfig = {
+    const first = createRunner<Ctx, string>()
+    const second = createRunner<Ctx, string>()
+    const config: Config = {
       strategies: {
         root: { fn: 'core.patch', props: { patch: 'matched' }, when: ['eq', 1, 2] },
       },
@@ -83,7 +83,7 @@ describe('registry', () => {
   })
 
   it('registers actions and conditions in batches before validation', () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
 
     runner.registerActions({
       custom: () => undefined,

@@ -1,12 +1,12 @@
-import { type BehaviorError, type BehaviorStrategy } from '~/types'
+import { type SlapError, type Strategy } from '~/types'
 import { executeSequence } from '~/helpers/runner/executeSequence'
 import { withErrorStage } from '~/helpers/errors/withErrorStage'
 import { isPromiseLike } from '~/helpers/runner/isPromiseLike'
 import { type Normalized, type RunState, type RunnerEnvironment } from '~/helpers/runner/runnerTypes'
 
 export const handleFailure = <TContext, TPatch>(
-  error: BehaviorError,
-  strategy: BehaviorStrategy,
+  error: SlapError,
+  strategy: Strategy,
   depth: number,
   state: RunState<TContext, TPatch>,
   environment: RunnerEnvironment<TContext, TPatch>

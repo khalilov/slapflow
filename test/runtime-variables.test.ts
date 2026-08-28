@@ -1,16 +1,17 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { createBehaviorRunner, type BehaviorProps } from '~/index'
+import { createRunner } from '~/runner'
+import { type Props } from '~/index'
 
 type Context = Record<string, unknown>
 
 const runProps = async (
-  props: BehaviorProps,
-  options: Parameters<typeof createBehaviorRunner<Context>>[0] = {},
+  props: Props,
+  options: Parameters<typeof createRunner<Context>>[0] = {},
   input: Record<string, unknown> = {}
 ) => {
-  let received: BehaviorProps = {}
-  const runner = createBehaviorRunner<Context>(options)
+  let received: Props = {}
+  const runner = createRunner<Context>(options)
 
   runner.registerAction('capture', ({ props: actionProps }) => {
     received = actionProps
@@ -178,7 +179,7 @@ describe('runtime variables and expressions', () => {
   })
 
   it('returns typed expression failures', async () => {
-    const cases: Array<[BehaviorProps, string]> = [
+    const cases: Array<[Props, string]> = [
       [{ value: { $expression: ['add', '1', 2] } }, 'EXPRESSION_INVALID_ARGUMENT'],
       [{ value: { $expression: ['at', ['a'], 0, 'unexpected'] } }, 'EXPRESSION_INVALID_ARGUMENT'],
       [{ value: { $expression: ['divide', 1, 0] } }, 'EXPRESSION_DIVISION_BY_ZERO'],
@@ -228,7 +229,7 @@ describe('runtime variables and expressions', () => {
   })
 
   it('blocks prototype access through variables and expressions', async () => {
-    const attempts: Array<[BehaviorProps, string]> = [
+    const attempts: Array<[Props, string]> = [
       [{ value: '$variables.constructor' }, 'VARIABLE_NOT_FOUND'],
       [{ value: { $expression: ['property', {}, 'toString'] } }, 'EXPRESSION_PATH_NOT_FOUND'],
       [{ value: { $expression: ['get', {}, 'constructor.name'] } }, 'EXPRESSION_PATH_NOT_FOUND'],
@@ -240,12 +241,12 @@ describe('runtime variables and expressions', () => {
   })
 
   it('redacts variable-derived trace props and isolates runner registries', async () => {
-    const first = createBehaviorRunner<Context>({
+    const first = createRunner<Context>({
       trace: true,
       variables: { SECRET: 'first-secret' },
       expressions: { identify: () => 'first' },
     })
-    const second = createBehaviorRunner<Context>({
+    const second = createRunner<Context>({
       trace: true,
       variables: { SECRET: 'second-secret' },
       expressions: { identify: () => 'second' },
@@ -278,7 +279,7 @@ describe('runtime variables and expressions', () => {
   it('makes run variables read-only and isolates supplied objects', async () => {
     const supplied = { SETTINGS: { count: 0 } }
     const seen: number[] = []
-    const runner = createBehaviorRunner<Context>({ variables: supplied })
+    const runner = createRunner<Context>({ variables: supplied })
     runner.registerAction('mutate', async ({ props }) => {
       const settings = props.settings as { count: number }
       settings.count += 1
@@ -304,7 +305,7 @@ describe('runtime variables and expressions', () => {
     const unsupported = [undefined, new Date(), new Map(), new Uint8Array([1]), new MutableValue()]
     for (const value of unsupported) {
       assert.throws(
-        () => createBehaviorRunner<Context>({ variables: { value } as never }),
+        () => createRunner<Context>({ variables: { value } as never }),
         /only primitives, arrays, and plain objects/
       )
     }
@@ -326,7 +327,7 @@ describe('runtime variables and expressions', () => {
 
     for (const value of [withGetter, withSymbol, withProperty]) {
       assert.throws(
-        () => createBehaviorRunner<Context>({ variables: { value } as never }),
+        () => createRunner<Context>({ variables: { value } as never }),
         /only primitives, arrays, and plain objects/
       )
     }
@@ -335,7 +336,7 @@ describe('runtime variables and expressions', () => {
 
   it('exposes read-only runtime variable access', async () => {
     let values: unknown[] = []
-    const runner = createBehaviorRunner<Context>({ variables: { nested: { value: 4 }, list: [7] } })
+    const runner = createRunner<Context>({ variables: { nested: { value: 4 }, list: [7] } })
     runner.registerAction('read', ({ runtime }) => {
       values = [
         runtime.variables?.get('nested.value'),

@@ -1,4 +1,4 @@
-import { type BehaviorActionArgs, type BehaviorActionResult } from '~/types'
+import { type ActionArgs, type ActionResult } from '~/types'
 import { stopResult } from '~/helpers/runner/stopResult'
 
 const defaultMax = 999
@@ -7,8 +7,8 @@ export const coreLoop = <TContext, TPatch>({
   props,
   signal,
   runtime,
-}: BehaviorActionArgs<TContext>): Promise<BehaviorActionResult<TContext, TPatch>> =>
-  new Promise<BehaviorActionResult<TContext, TPatch>>((resolve) => {
+}: ActionArgs<TContext>): Promise<ActionResult<TContext, TPatch>> =>
+  new Promise<ActionResult<TContext, TPatch>>((resolve) => {
     const configuredDuration = Number(props.duration ?? 0)
     const duration = Number.isFinite(configuredDuration) ? Math.max(1, configuredDuration) : 1
     const configuredMax = Number(props.max ?? defaultMax)
@@ -23,7 +23,7 @@ export const coreLoop = <TContext, TPatch>({
     let running = false
     let stopped = false
 
-    const finish = (result: BehaviorActionResult<TContext, TPatch>): void => {
+    const finish = (result: ActionResult<TContext, TPatch>): void => {
       if (stopped) {
         return
       }

@@ -5,4 +5,4 @@ export const timeoutResult = <TContext, TPatch>(
   timeout: number | undefined,
   strategy: string
 ): Normalized<TContext, TPatch> =>
-  failLimit<TContext, TPatch>('TIMEOUT', `Behavior run timed out after ${timeout}ms`, strategy)
+  failLimit<TContext, TPatch>('TIMEOUT', `Slapflow run timed out after ${timeout}ms`, strategy)

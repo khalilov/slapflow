@@ -1,8 +1,8 @@
-import { type BehaviorError, type BehaviorErrorStage } from '~/types'
+import { type SlapError, type ErrorStage } from '~/types'
 import { compactErrorStage } from '~/helpers/errors/compactErrorStage'
 
-export const withErrorStage = (error: BehaviorError, stage: BehaviorErrorStage): BehaviorError => {
-  const nextError: BehaviorError = {
+export const withErrorStage = (error: SlapError, stage: ErrorStage): SlapError => {
+  const nextError: SlapError = {
     ...error,
     stage: compactErrorStage({
       ...stage,

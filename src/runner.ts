@@ -1,1 +1,1 @@
-export { createBehaviorRunner } from '~/helpers/runner/createBehaviorRunner'
+export { createRunner } from '~/helpers/runner/createRunner'

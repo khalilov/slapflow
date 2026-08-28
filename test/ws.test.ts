@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { createBehaviorWs, createPubSubBehavior, type BehaviorWsSocket } from '~/index'
+import { createWS, createPubSub, type WSSocket } from '~/index'
 
 type Events = {
   'order.created': { orderId: string }
@@ -9,7 +9,7 @@ type Events = {
 
 const wait = async (delay: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, delay))
 
-class FakeSocket implements BehaviorWsSocket {
+class FakeSocket implements WSSocket {
   readyState = 0
   sent: string[] = []
   private listeners = new Map<string, EventListener[]>()
@@ -52,13 +52,13 @@ class FakeSocket implements BehaviorWsSocket {
   }
 }
 
-describe('behavior websocket bridge', () => {
+describe('websocket bridge', () => {
   it('dispatches allowed inbound envelopes and forwards allowed outbound envelopes', () => {
-    const bus = createPubSubBehavior<Events>()
+    const bus = createPubSub<Events>()
     const socket = new FakeSocket()
     const received: string[] = []
     bus.on('order.created', ({ parsed }) => received.push(parsed.orderId))
-    const ws = createBehaviorWs({
+    const ws = createWS({
       bus,
       createSocket: () => socket,
       inboundTopics: ['order.created'],
@@ -87,10 +87,10 @@ describe('behavior websocket bridge', () => {
   })
 
   it('retries a failed connection and exposes its status', async () => {
-    const bus = createPubSubBehavior<Events>()
+    const bus = createPubSub<Events>()
     const socket = new FakeSocket()
     let attempts = 0
-    const ws = createBehaviorWs({
+    const ws = createWS({
       bus,
       createSocket: () => {
         attempts += 1
@@ -114,8 +114,8 @@ describe('behavior websocket bridge', () => {
   })
 
   it('stops retrying after the configured maximum', () => {
-    const bus = createPubSubBehavior<Events>()
-    const ws = createBehaviorWs({
+    const bus = createPubSub<Events>()
+    const ws = createWS({
       bus,
       createSocket: () => {
         throw new Error('offline')

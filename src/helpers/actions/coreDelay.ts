@@ -1,9 +1,9 @@
-import { type BehaviorActionArgs, type BehaviorActionResult } from '~/types'
+import { type ActionArgs, type ActionResult } from '~/types'
 
 export const coreDelay = async <TContext, TPatch>({
   props,
   signal,
-}: BehaviorActionArgs<TContext>): Promise<BehaviorActionResult<TContext, TPatch>> => {
+}: ActionArgs<TContext>): Promise<ActionResult<TContext, TPatch>> => {
   const ms = Math.max(0, Number(props.ms ?? 0))
 
   await new Promise<void>((resolve) => {

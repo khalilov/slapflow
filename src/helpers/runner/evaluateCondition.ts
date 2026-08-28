@@ -1,27 +1,27 @@
 import {
-  type BehaviorConditionExpression,
-  type BehaviorConditionFn,
-  type BehaviorError,
-  type BehaviorInput,
-  type BehaviorRuntime,
+  type ConditionExpression,
+  type ConditionFn,
+  type SlapError,
+  type Input,
+  type Runtime,
 } from '~/types'
-import { behaviorError } from '~/helpers/errors/behaviorError'
+import { slapError } from '~/helpers/errors/slapError'
 import { resolveValue } from '~/helpers/path/resolveValue'
 import { ResolutionError } from '~/helpers/path/ResolutionError'
 
 type EvaluateConditionScope<TContext> = {
   context: TContext
-  input: BehaviorInput
+  input: Input
   data: Record<string, unknown>
-  runtime: Pick<BehaviorRuntime, 'resolve' | 'get' | 'data' | 'variables' | 'getData'>
+  runtime: Pick<Runtime, 'resolve' | 'get' | 'data' | 'variables' | 'getData'>
   strategy?: string
 }
 
 export const evaluateCondition = <TContext>(
-  expression: BehaviorConditionExpression | undefined,
-  registry: Map<string, BehaviorConditionFn<TContext>>,
+  expression: ConditionExpression | undefined,
+  registry: Map<string, ConditionFn<TContext>>,
   scope: EvaluateConditionScope<TContext>
-): { ok: true; matched: boolean } | { ok: false; error: BehaviorError } => {
+): { ok: true; matched: boolean } | { ok: false; error: SlapError } => {
   if (expression === undefined) {
     return { ok: true, matched: true }
   }
@@ -31,7 +31,7 @@ export const evaluateCondition = <TContext>(
 
   const [operator, ...rawArgs] = expression
   if (operator === 'and') {
-    for (const item of rawArgs as BehaviorConditionExpression[]) {
+    for (const item of rawArgs as ConditionExpression[]) {
       const result = evaluateCondition(item, registry, scope)
       if (!result.ok || !result.matched) {
         return result
@@ -40,7 +40,7 @@ export const evaluateCondition = <TContext>(
     return { ok: true, matched: true }
   }
   if (operator === 'or') {
-    for (const item of rawArgs as BehaviorConditionExpression[]) {
+    for (const item of rawArgs as ConditionExpression[]) {
       const result = evaluateCondition(item, registry, scope)
       if (!result.ok) {
         return result
@@ -52,7 +52,7 @@ export const evaluateCondition = <TContext>(
     return { ok: true, matched: false }
   }
   if (operator === 'not') {
-    const result = evaluateCondition(rawArgs[0] as BehaviorConditionExpression, registry, scope)
+    const result = evaluateCondition(rawArgs[0] as ConditionExpression, registry, scope)
     return result.ok ? { ok: true, matched: !result.matched } : result
   }
 
@@ -60,7 +60,7 @@ export const evaluateCondition = <TContext>(
   if (!condition) {
     return {
       ok: false,
-      error: behaviorError('CONDITION_NOT_FOUND', `Condition "${operator}" is not registered`, {
+      error: slapError('CONDITION_NOT_FOUND', `Condition "${operator}" is not registered`, {
         ...(scope.strategy ? { strategy: scope.strategy } : {}),
       }),
     }
@@ -72,7 +72,7 @@ export const evaluateCondition = <TContext>(
     return { ok: true, matched: Boolean(condition(scope, ...args)) }
   } catch (cause) {
     if (cause instanceof ResolutionError) {
-      return { ok: false, error: cause.behaviorError }
+      return { ok: false, error: cause.slapError }
     }
     throw cause
   }

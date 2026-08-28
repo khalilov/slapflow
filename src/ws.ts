@@ -1,31 +1,31 @@
 import {
-  type BehaviorBus,
-  type BehaviorEventMap,
-  type BehaviorEventName,
-  type BehaviorWs,
-  type BehaviorWsOptions,
-  type BehaviorWsSocket,
-  type BehaviorWsStatus,
+  type Bus,
+  type EventMap,
+  type EventName,
+  type WS,
+  type WSOptions,
+  type WSSocket,
+  type WSStatus,
 } from '~/types'
 import { getRetryDelay } from '~/helpers/retry/getRetryDelay'
 
 const openState = 1
 const maxSeenEvents = 1_000
 
-export const createBehaviorWs = <TEvents extends object = BehaviorEventMap>(
-  options: BehaviorWsOptions<TEvents>
-): BehaviorWs => {
+export const createWS = <TEvents extends object = EventMap>(
+  options: WSOptions<TEvents>
+): WS => {
   const inboundTopics = new Set<string>(options.inboundTopics ?? [])
   const outboundTopics = new Set<string>(options.outboundTopics ?? [])
   const seenEventIds = new Set<string>()
   const outboundUnsubscribers = new Set<() => void>()
   const socketUnsubscribers = new Set<() => void>()
-  let socket: BehaviorWsSocket | undefined
+  let socket: WSSocket | undefined
   let retryTimer: ReturnType<typeof setTimeout> | undefined
   let retryAttempt = 0
   let started = false
-  let currentStatus: BehaviorWsStatus = 'idle'
-  const diagnosticsBus = options.bus as unknown as BehaviorBus<BehaviorEventMap>
+  let currentStatus: WSStatus = 'idle'
+  const diagnosticsBus = options.bus as unknown as Bus<EventMap>
 
   const emitDiagnostic = (topic: string, payload: Record<string, unknown>): void => {
     diagnosticsBus.emit(topic, payload, {
@@ -57,7 +57,7 @@ export const createBehaviorWs = <TEvents extends object = BehaviorEventMap>(
 
     if (maxAttempts !== undefined && retryAttempt >= maxAttempts) {
       currentStatus = 'stopped'
-      emitDiagnostic('cfb.ws.disconnected', { reason: 'retry-limit-reached', attempt: retryAttempt })
+      emitDiagnostic('slapflow.ws.disconnected', { reason: 'retry-limit-reached', attempt: retryAttempt })
     } else {
       const delay = getRetryDelay(retryAttempt, options.retry ?? {})
       const attempt = retryAttempt + 1
@@ -69,7 +69,7 @@ export const createBehaviorWs = <TEvents extends object = BehaviorEventMap>(
       currentStatus = 'retrying'
       retryAttempt = attempt
       retryTimer = setTimeout(retry, delay)
-      emitDiagnostic('cfb.ws.retrying', {
+      emitDiagnostic('slapflow.ws.retrying', {
         reason,
         delay,
         attempt,
@@ -81,7 +81,7 @@ export const createBehaviorWs = <TEvents extends object = BehaviorEventMap>(
   const connect = (): void => {
     if (started && !socket) {
       currentStatus = 'connecting'
-      emitDiagnostic('cfb.ws.connecting', { attempt: retryAttempt })
+      emitDiagnostic('slapflow.ws.connecting', { attempt: retryAttempt })
 
       try {
         const current = options.createSocket()
@@ -104,7 +104,7 @@ export const createBehaviorWs = <TEvents extends object = BehaviorEventMap>(
           if (socket === current) {
             retryAttempt = 0
             currentStatus = 'connected'
-            emitDiagnostic('cfb.ws.connected', {})
+            emitDiagnostic('slapflow.ws.connected', {})
           }
         })
         listen('close', () => disconnect('close'))
@@ -120,16 +120,16 @@ export const createBehaviorWs = <TEvents extends object = BehaviorEventMap>(
                   rememberEvent(busEvent.id)
                 }
                 if (!options.bus.dispatch(busEvent)) {
-                  emitDiagnostic('cfb.ws.message.rejected', { reason: 'invalid-envelope', topic: busEvent.topic })
+                  emitDiagnostic('slapflow.ws.message.rejected', { reason: 'invalid-envelope', topic: busEvent.topic })
                 }
               } else {
-                emitDiagnostic('cfb.ws.message.rejected', { reason: 'topic-not-allowed', topic: busEvent.topic })
+                emitDiagnostic('slapflow.ws.message.rejected', { reason: 'topic-not-allowed', topic: busEvent.topic })
               }
             } catch (error) {
-              emitDiagnostic('cfb.ws.message.rejected', { reason: 'message-parse-failed', error: String(error) })
+              emitDiagnostic('slapflow.ws.message.rejected', { reason: 'message-parse-failed', error: String(error) })
             }
           } else {
-            emitDiagnostic('cfb.ws.message.rejected', { reason: 'message-not-string' })
+            emitDiagnostic('slapflow.ws.message.rejected', { reason: 'message-not-string' })
           }
         })
       } catch (error) {
@@ -142,7 +142,7 @@ export const createBehaviorWs = <TEvents extends object = BehaviorEventMap>(
     if (!started) {
       started = true
       for (const topic of outboundTopics) {
-        const unsubscribe = options.bus.on(topic as BehaviorEventName<TEvents>, (event) => {
+        const unsubscribe = options.bus.on(topic as EventName<TEvents>, (event) => {
           if (!seenEventIds.delete(event.id) && event.origin !== options.origin && socket?.readyState === openState) {
             socket.send(JSON.stringify(event))
           }
@@ -167,7 +167,7 @@ export const createBehaviorWs = <TEvents extends object = BehaviorEventMap>(
     clearSocket()
     current?.close()
     currentStatus = 'stopped'
-    emitDiagnostic('cfb.ws.disconnected', { reason: 'stopped' })
+    emitDiagnostic('slapflow.ws.disconnected', { reason: 'stopped' })
   }
 
   const reconnect = (): void => {

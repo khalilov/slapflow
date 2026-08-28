@@ -3,16 +3,16 @@ import { readFile } from 'node:fs/promises'
 import { describe, it } from 'vitest'
 import { createBuiltinActions } from '~/builtins/actions'
 import { createBuiltinConditions } from '~/builtins/conditions'
+import { createRunner } from '~/runner'
 import {
-  createBehaviorRunner,
-  defineBehaviorConfig,
+  defineConfig,
   createActionsRegistry,
   createConditionsRegistry,
   createMemoryTraceSink,
-  type BehaviorAction,
-  type BehaviorConditionFn,
-  type BehaviorRunResult,
-  type BehaviorRuntime,
+  type Action,
+  type ConditionFn,
+  type RunResult,
+  type Runtime,
 } from '~/index'
 
 type Ctx = {
@@ -35,15 +35,15 @@ describe('public contract', () => {
       patch: () => undefined,
       stop: () => ({ type: 'stop' as const }),
       fail: () => ({ type: 'fail' as const }),
-    } satisfies BehaviorRuntime
+    } satisfies Runtime
 
     assert.equal(runtime.get('missing'), undefined)
   })
 
   it('exports the root api and public types used by consumers', async () => {
-    const action: BehaviorAction<Ctx, string> = ({ context }) => ({ patch: String(context.count) })
-    const condition: BehaviorConditionFn<Ctx> = ({ context }) => context.count > 0
-    const runner = createBehaviorRunner<Ctx, string>({ trace: createMemoryTraceSink() })
+    const action: Action<Ctx, string> = ({ context }) => ({ patch: String(context.count) })
+    const condition: ConditionFn<Ctx> = ({ context }) => context.count > 0
+    const runner = createRunner<Ctx, string>({ trace: createMemoryTraceSink() })
     const config = { strategies: {} }
 
     runner.registerAction('custom.patch', action)
@@ -54,12 +54,12 @@ describe('public contract', () => {
       },
     })
 
-    const result: BehaviorRunResult<Ctx, string> = await runner.run('root', { count: 2 })
+    const result: RunResult<Ctx, string> = await runner.run('root', { count: 2 })
 
     assert.deepEqual(result.patches, ['2'])
     assert.equal(createActionsRegistry<Ctx, string>().has('core.noop'), true)
     assert.equal(createConditionsRegistry<Ctx>().has('eq'), true)
-    assert.equal(defineBehaviorConfig(config), config)
+    assert.equal(defineConfig(config), config)
   })
 
   it('keeps spec built-in action names synchronized with implementation', async () => {

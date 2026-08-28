@@ -1,4 +1,4 @@
-import { type BehaviorActionStop } from '~/types'
+import { type ActionStop } from '~/types'
 
-export const stopResult = <TPatch>(reason?: string): BehaviorActionStop<TPatch> =>
+export const stopResult = <TPatch>(reason?: string): ActionStop<TPatch> =>
   reason ? { type: 'stop', reason } : { type: 'stop' }

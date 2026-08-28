@@ -1,4 +1,4 @@
-import { type BehaviorConditionFn } from '~/types'
+import { type ConditionFn } from '~/types'
 import { changedCondition } from '~/helpers/conditions/changedCondition'
 import { cooldownReadyCondition } from '~/helpers/conditions/cooldownReadyCondition'
 import { emptyCondition } from '~/helpers/conditions/emptyCondition'
@@ -16,10 +16,10 @@ import { notEmptyCondition } from '~/helpers/conditions/notEmptyCondition'
 import { truthyCondition } from '~/helpers/conditions/truthyCondition'
 import { typeIsCondition } from '~/helpers/conditions/typeIsCondition'
 
-export type ConditionsRegistry<TContext> = Map<string, BehaviorConditionFn<TContext>>
+export type ConditionsRegistry<TContext> = Map<string, ConditionFn<TContext>>
 
 export const createConditionsRegistry = <TContext>(): ConditionsRegistry<TContext> =>
-  new Map<string, BehaviorConditionFn<TContext>>([
+  new Map<string, ConditionFn<TContext>>([
     ['eq', eqCondition],
     ['neq', neqCondition],
     ['gt', gtCondition],

@@ -1,15 +1,15 @@
-import { type BehaviorConfig, type BehaviorValidationIssue } from '~/types'
+import { type Config, type ValidationIssue } from '~/types'
 import { validateCondition } from '~/helpers/validation/validateCondition'
 import { validateRefs } from '~/helpers/validation/validateRefs'
 import { type RegistryReader } from '~/helpers/validation/registryReader'
 
 export const validateNextList = (
-  config: BehaviorConfig,
+  config: Config,
   list: unknown,
   path: string,
   strategy: string,
   conditionsRegistry: RegistryReader,
-  errors: BehaviorValidationIssue[]
+  errors: ValidationIssue[]
 ): void => {
   if (list === undefined) {
     return

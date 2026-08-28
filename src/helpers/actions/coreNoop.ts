@@ -1,3 +1,3 @@
-import { type BehaviorActionResult } from '~/types'
+import { type ActionResult } from '~/types'
 
-export const coreNoop = <TContext, TPatch>(): BehaviorActionResult<TContext, TPatch> => undefined
+export const coreNoop = <TContext, TPatch>(): ActionResult<TContext, TPatch> => undefined

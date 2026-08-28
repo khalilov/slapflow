@@ -1,6 +1,6 @@
-# Chain Functions Behavior Specification
+# Slapflow Specification
 
-`chain-functions-behavior` is an npm package for declaratively executing synchronous and asynchronous actions in ordered chains with execution conditions, fallback branches, trace output, and safety limits.
+`slapflow` is an npm package for declaratively executing synchronous and asynchronous actions in ordered chains with execution conditions, fallback branches, trace output, and safety limits.
 
 The package is not coupled to a UI, server framework, scheduler, or domain model. An application registers actions and conditions, supplies context and input, and the runner returns the chain execution result.
 
@@ -12,21 +12,25 @@ The package is not coupled to a UI, server framework, scheduler, or domain model
 
 ```ts
 import {
-  createBehaviorRunner,
   createActionsRegistry,
   createConditionsRegistry,
   createMemoryTraceSink,
   defineErrorReporter,
-  createPubSubBehavior,
-  PubSubBehavior,
-  createChainBehavior,
-  createBehaviorWs,
+  createPubSub,
+  PubSub,
+  createFlow,
+  createWS,
   catchError,
-} from 'chain-functions-behavior'
+} from 'slapflow'
 ```
 
 ```ts
-const runner = createBehaviorRunner<Context, Patch>()
+const flow = createFlow<Context, Patch>(
+  { config: { strategies: {} } },
+  { context: () => ({} as Context) }
+)
+const runner = flow.runner
+
 runner.registerAction('jobs.execute', executeJob)
 runner.registerCondition('hasQueue', ({ context }) => context.queue.length > 0)
 
@@ -37,18 +41,18 @@ const result = await runner.run('worker.tick', context, input)
 ## Core Types
 
 ```ts
-type BehaviorConfig = {
+type Config = {
   version?: 1
-  strategies: Record<string, BehaviorStrategy>
+  strategies: Record<string, Strategy>
   entrypoints?: Record<string, string>
 }
 
-type BehaviorStrategy = {
+type Strategy = {
   fn: string
   props?: Record<string, unknown>
-  when?: BehaviorConditionExpression
-  then?: BehaviorNext[]
-  catch?: BehaviorNext[]
+  when?: ConditionExpression
+  then?: Next[]
+  catch?: Next[]
   mode?: 'sequence' | 'selector' | 'parallel'
   terminal?: boolean
 }
@@ -59,7 +63,7 @@ type BehaviorStrategy = {
 The runner works as a declarative try/catch pipeline: an action can return `runtime.fail(...)` or throw, a strategy can define `catch`, and an application can centrally report errors through `onError`.
 
 ```ts
-const reportBehaviorError = defineErrorReporter({
+const reportError = defineErrorReporter({
   report: ({ error, context, input, data, patches, events, trace }) => {
     Sentry.captureException(error.cause ?? error, {
       tags: {
@@ -73,35 +77,35 @@ const reportBehaviorError = defineErrorReporter({
   },
 })
 
-const runner = createBehaviorRunner({
-  trace: true,
-  onError: reportBehaviorError,
-})
+const flow = createFlow(
+  { config: { strategies: {} } },
+  { context: () => ({} as Context), trace: true, onError: reportError }
+)
 ```
 
-`onError` receives `BehaviorErrorEvent`:
+`onError` receives `SlapErrorEvent`:
 
 ```ts
-type BehaviorErrorEvent<TContext, TPatch> = {
-  error: BehaviorError
+type SlapErrorEvent<TContext, TPatch> = {
+  error: SlapError
   context: TContext
-  input: BehaviorInput
+  input: Input
   data: Record<string, unknown>
   patches: TPatch[]
-  events: BehaviorEvent[]
-  trace?: BehaviorTraceEntry[]
+  events: SlapEvent[]
+  trace?: TraceEntry[]
 }
 ```
 
-`BehaviorError.stage` identifies the chain phase:
+`SlapError.stage` identifies the chain phase:
 
 ```ts
-type BehaviorErrorStage = {
+type ErrorStage = {
   phase: 'entrypoint' | 'condition' | 'action' | 'catch' | 'limit'
   entrypoint?: string
   strategy?: string
   fn?: string
-  mode?: BehaviorMode
+  mode?: Mode
   step?: number
   depth?: number
 }
@@ -224,7 +228,7 @@ export const config = {
 ## Runtime Helpers
 
 ```ts
-type BehaviorRuntime = {
+type Runtime = {
   get(path: string): unknown
   set(path: string, value: unknown): void
   data: {
@@ -240,12 +244,12 @@ type BehaviorRuntime = {
   setData(path: string, value: unknown): void
   resolve(value: unknown): unknown
   signal: AbortSignal
-  executeThen(): Promise<BehaviorRuntimeBranchResult>
-  executeCatch(): Promise<BehaviorRuntimeBranchResult | undefined>
-  emit(event: BehaviorEvent): void
+  executeThen(): Promise<RuntimeBranchResult>
+  executeCatch(): Promise<RuntimeBranchResult | undefined>
+  emit(event: SlapEvent): void
   patch(patch: unknown): void
-  stop(reason?: string): BehaviorActionStop<unknown>
-  fail(reason?: string, data?: Record<string, unknown>): BehaviorActionFail
+  stop(reason?: string): ActionStop<unknown>
+  fail(reason?: string, data?: Record<string, unknown>): ActionFail
 }
 ```
 
@@ -285,14 +289,14 @@ Trace does not store a complete context snapshot.
 
 ## Pub/Sub Bus
 
-`PubSubBehavior` is a process-local singleton event bus. Use `createPubSubBehavior` for isolated runtimes.
+`PubSub` is a process-local singleton event bus. Use `createPubSub` for isolated runtimes.
 
 ```ts
 type AppEvents = {
   'auth.signed-in': { userId: string }
 }
 
-const bus = createPubSubBehavior<AppEvents>()
+const bus = createPubSub<AppEvents>()
 const unsubscribe = bus.on('auth.signed-in', ({ parsed, serialized }) => {
   console.log(parsed.userId)
   socket.send(serialized)
@@ -303,20 +307,20 @@ unsubscribe()
 ```
 
 ```ts
-type BehaviorBus<TEvents extends object = Record<string, unknown>> = {
+type Bus<TEvents extends object = Record<string, unknown>> = {
   on<TEvent extends keyof TEvents>(
     event: TEvent,
-    handler: (event: BehaviorBusEvent<TEvents[TEvent]>) => void
+    handler: (event: BusEvent<TEvents[TEvent]>) => void
   ): () => void
-  off<TEvent extends keyof TEvents>(event: TEvent, handler?: (event: BehaviorBusEvent<TEvents[TEvent]>) => void): void
+  off<TEvent extends keyof TEvents>(event: TEvent, handler?: (event: BusEvent<TEvents[TEvent]>) => void): void
   emit<TEvent extends keyof TEvents>(
     topic: TEvent,
     payload: TEvents[TEvent],
     options?: { origin?: string }
-  ): BehaviorBusEvent<TEvents[TEvent]>
+  ): BusEvent<TEvents[TEvent]>
 }
 
-type BehaviorBusEvent<TPayload> = {
+type BusEvent<TPayload> = {
   id: string
   topic: string
   occurredAt: number
@@ -326,18 +330,18 @@ type BehaviorBusEvent<TPayload> = {
 }
 ```
 
-`emit` creates an envelope and serializes the payload once before subscribers run. Event identifiers are opaque 12-character alphanumeric runtime IDs for correlation and echo suppression. They are not cryptographically secure and must not be used for access tokens, signatures, public links, or any security-sensitive purpose. `on` returns an unsubscribe function. `off(event, handler)` removes one handler, while `off(event)` clears the channel. An error in one subscriber does not block the others; `createPubSubBehavior({ onError })` receives the error and original event. On serialization failure, the bus delivers `{ error }` as `parsed` and the error body as `serialized`, then calls `onError` with the original cause.
+`emit` creates an envelope and serializes the payload once before subscribers run. Event identifiers are opaque 12-character alphanumeric runtime IDs for correlation and echo suppression. They are not cryptographically secure and must not be used for access tokens, signatures, public links, or any security-sensitive purpose. `on` returns an unsubscribe function. `off(event, handler)` removes one handler, while `off(event)` clears the channel. An error in one subscriber does not block the others; `createPubSub({ onError })` receives the error and original event. On serialization failure, the bus delivers `{ error }` as `parsed` and the error body as `serialized`, then calls `onError` with the original cause.
 
-## Chain Behavior
+## Flow
 
-`createChainBehavior` combines configuration, actions, conditions, a context provider, and event bindings. It creates a runner and supports the `start`/`stop` lifecycle.
+`createFlow` combines configuration, actions, conditions, a context provider, and event bindings. It creates a runner (accessible via `flow.runner`) and supports the `start`/`stop` lifecycle.
 
 ```ts
 type Events = {
   'form.submit': { email: string }
 }
 
-const behavior = createChainBehavior<Context, Patch, Events>(
+const flow = createFlow<Context, Patch, Events>(
   {
     actions: { 'form.save': saveForm },
     conditions: { allowed: isAllowed },
@@ -347,30 +351,30 @@ const behavior = createChainBehavior<Context, Patch, Events>(
   { bus, context: () => appStore.getState() }
 )
 
-const started = behavior.start()
-behavior.stop()
+const started = flow.start()
+flow.stop()
 ```
 
 A `[bus] <event-name>` binding starts an `entrypoint` from `config.entrypoints`. The event payload must be an object and is passed to the runner as `input`. Context is read for each event, so a context provider returns current state.
 
 ```ts
-type BehaviorStartResult = {
+type StartResult = {
   active: string[]
   inactive: Array<{ binding: string; reason: 'unsupported-source' }>
-  validation: BehaviorValidationResult
+  validation: ValidationResult
 }
 ```
 
-`start()` registers actions and conditions, validates and loads configuration. Bindings are not installed after failed validation. Calling `start()` again replaces existing bindings. `stop()` releases only subscriptions owned by the current behavior.
+`start()` registers actions and conditions, validates and loads configuration. Bindings are not installed after failed validation. Calling `start()` again replaces existing bindings. `stop()` releases only subscriptions owned by the current chain.
 
-`onRunnerError` in `ChainBehaviorOptions` is called only when final `BehaviorRunResult.status === 'failed'`. The callback receives `error`, `result`, `binding`, `entrypoint`, `runId`, and optional `key`. An error recovered by a strategy through `catch` does not invoke `onRunnerError`.
+`onRunnerError` in `FlowOptions` is called only when final `RunResult.status === 'failed'`. The callback receives `error`, `result`, `binding`, `entrypoint`, `runId`, and optional `key`. An error recovered by a strategy through `catch` does not invoke `onRunnerError`.
 
 ### Concurrency
 
 Each binding supports `parallel`, `latest`, `queue`, and `drop`. The default mode is `parallel`. Concurrency applies to one binding and lane; `key(payload)` creates independent lanes.
 
 ```ts
-type BehaviorConcurrencyOptions<TPayload> = {
+type ConcurrencyOptions<TPayload> = {
   mode?: 'parallel' | 'latest' | 'queue' | 'drop'
   key?: (payload: TPayload) => string
   maxQueueSize?: number
@@ -378,22 +382,22 @@ type BehaviorConcurrencyOptions<TPayload> = {
 }
 ```
 
-Options are set globally in `createChainBehavior` and can be overridden by a binding. `queue` is limited by `maxQueueSize`, which defaults to `50`. On overflow, CFB publishes `cfb.queue.overflow` and `cfb.run.dropped`.
+Options are set globally in `createFlow` and can be overridden by a binding. `queue` is limited by `maxQueueSize`, which defaults to `50`. On overflow, Slapflow publishes `slapflow.queue.overflow` and `slapflow.run.dropped`.
 
-`BehaviorActionArgs` and `BehaviorRuntime` contain `signal: AbortSignal`. `latest` aborts the previous run in the same lane. `behavior.stop({ force: true })` aborts every active run; normal `stop()` removes bindings and does not cancel running actions. Abort is cooperative: an action uses the signal for fetches, timers, and its own asynchronous work.
+`ActionArgs` and `Runtime` contain `signal: AbortSignal`. `latest` aborts the previous run in the same lane. `flow.stop({ force: true })` aborts every active run; normal `stop()` removes bindings and does not cancel running actions. Abort is cooperative: an action uses the signal for fetches, timers, and its own asynchronous work.
 
 Lifecycle diagnostics are published through the configured bus:
 
-- `cfb.run.started`;
-- `cfb.run.finished`;
-- `cfb.run.failed`;
-- `cfb.run.cancelled`;
-- `cfb.run.dropped`;
-- `cfb.queue.overflow`.
+- `slapflow.run.started`;
+- `slapflow.run.finished`;
+- `slapflow.run.failed`;
+- `slapflow.run.cancelled`;
+- `slapflow.run.dropped`;
+- `slapflow.queue.overflow`.
 
 ### DOM Bindings
 
-A DOM binding key uses the `[dom] <css-selector>:<event>` format. CFB installs a delegated listener on `options.root` or `document`. In a runtime without DOM, the binding is added to `inactive` with reason `dom-unavailable`.
+A DOM binding key uses the `[dom] <css-selector>:<event>` format. Slapflow installs a delegated listener on `options.root` or `document`. In a runtime without DOM, the binding is added to `inactive` with reason `dom-unavailable`.
 
 ```ts
 '[dom] .app-button[type="submit"]:click': {
@@ -413,14 +417,14 @@ A DOM binding key uses the `[dom] <css-selector>:<event>` format. CFB installs a
 
 ### WebSocket Bridge
 
-`createBehaviorWs` connects a bus to a WebSocket-like transport. The bridge accepts `createSocket`, so it works with browser WebSocket and a server adapter alike.
+`createWS` connects a bus to a WebSocket-like transport. The bridge accepts `createSocket`, so it works with browser WebSocket and a server adapter alike.
 
 ```ts
-const ws = createBehaviorWs({
+const ws = createWS({
   bus,
   createSocket: () => new WebSocket(url),
   inboundTopics: ['order.created'],
-  outboundTopics: ['cfb.run.finished'],
+  outboundTopics: ['slapflow.run.finished'],
   origin: 'worker',
   retry: { initialDelay: 500, maxDelay: 10_000, multiplier: 2, jitter: true, maxAttempts: 5 },
 })
@@ -428,7 +432,7 @@ const ws = createBehaviorWs({
 ws.start()
 ```
 
-Inbound topics pass an explicit allowlist. The bridge parses a JSON envelope and calls `bus.dispatch(event)`, preserving `id`, `occurredAt`, `origin`, `parsed`, and `serialized`; it remembers accepted inbound IDs and does not send them back outbound. Outbound topics send the complete event envelope as JSON, so the remote bridge can dispatch it without recreating its identity. `maxAttempts` limits reconnects; omitting it retries indefinitely. `start`, `stop`, `reconnect`, and `status` manage the transport lifecycle. Diagnostics: `cfb.ws.connecting`, `cfb.ws.connected`, `cfb.ws.disconnected`, `cfb.ws.retrying`, and `cfb.ws.message.rejected`.
+Inbound topics pass an explicit allowlist. The bridge parses a JSON envelope and calls `bus.dispatch(event)`, preserving `id`, `occurredAt`, `origin`, `parsed`, and `serialized`; it remembers accepted inbound IDs and does not send them back outbound. Outbound topics send the complete event envelope as JSON, so the remote bridge can dispatch it without recreating its identity. `maxAttempts` limits reconnects; omitting it retries indefinitely. `start`, `stop`, `reconnect`, and `status` manage the transport lifecycle. Diagnostics: `slapflow.ws.connecting`, `slapflow.ws.connected`, `slapflow.ws.disconnected`, `slapflow.ws.retrying`, and `slapflow.ws.message.rejected`.
 
 ## Safety Limits
 

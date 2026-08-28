@@ -1,4 +1,4 @@
-import { type BehaviorValidationIssue } from '~/types'
+import { type ValidationIssue } from '~/types'
 
 type RunnerLimitOptions = {
   maxStepCount?: number
@@ -6,8 +6,8 @@ type RunnerLimitOptions = {
   maxDepth?: number
 }
 
-export const runnerLimitWarnings = (options: RunnerLimitOptions): BehaviorValidationIssue[] => {
-  const warnings: BehaviorValidationIssue[] = []
+export const runnerLimitWarnings = (options: RunnerLimitOptions): ValidationIssue[] => {
+  const warnings: ValidationIssue[] = []
   const maxStepCount = options.maxStepCount ?? options.maxSteps
 
   if (maxStepCount === -1) {

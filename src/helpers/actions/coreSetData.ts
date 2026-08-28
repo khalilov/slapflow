@@ -1,10 +1,10 @@
-import { type BehaviorActionArgs, type BehaviorActionResult } from '~/types'
+import { type ActionArgs, type ActionResult } from '~/types'
 
 /** @deprecated Use `runtime.data.set(path, value)` inside an application action. */
 export const coreSetData = <TContext, TPatch>({
   props,
   runtime,
-}: BehaviorActionArgs<TContext>): BehaviorActionResult<TContext, TPatch> => {
+}: ActionArgs<TContext>): ActionResult<TContext, TPatch> => {
   const path = props.path
 
   if (typeof path === 'string') {

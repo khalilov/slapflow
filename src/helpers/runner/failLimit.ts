@@ -1,5 +1,5 @@
 import { type Normalized } from '~/helpers/runner/runnerTypes'
-import { behaviorError } from '~/helpers/errors/behaviorError'
+import { slapError } from '~/helpers/errors/slapError'
 
 export const failLimit = <TContext, TPatch>(
   code: string,
@@ -7,7 +7,7 @@ export const failLimit = <TContext, TPatch>(
   id: string
 ): Normalized<TContext, TPatch> => ({
   status: 'failed',
-  error: behaviorError(code, message, { strategy: id, stage: { phase: 'limit', strategy: id } }),
+  error: slapError(code, message, { strategy: id, stage: { phase: 'limit', strategy: id } }),
   patches: [],
   events: [],
 })

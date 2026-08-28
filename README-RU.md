@@ -1,11 +1,11 @@
-# CFB — поведение цепочек функций
+# Slapflow
 
-Когда один и тот же сценарий запускается из формы, HTTP API, фоновой задачи или WebSocket-сообщения, его логика быстро расползается по обработчикам и сервисам. CFB помогает собрать её в одном явном месте — в цепочке обычных TypeScript-функций.
+Когда один и тот же сценарий запускается из формы, HTTP API, фоновой задачи или WebSocket-сообщения, его логика быстро расползается по обработчикам и сервисам. Slapflow помогает собрать её в одном явном месте — в цепочке обычных TypeScript-функций.
 
-[![Размер бандла](https://img.shields.io/bundlephobia/minzip/chain-functions-behavior?label=%D1%80%D0%B0%D0%B7%D0%BC%D0%B5%D1%80%20%D0%B1%D0%B0%D0%BD%D0%B4%D0%BB%D0%B0)](https://bundlephobia.com/package/chain-functions-behavior)
-[![Безопасность Socket](https://socket.dev/api/badge/npm/package/chain-functions-behavior/1.6.1)](https://socket.dev/npm/package/chain-functions-behavior/overview/1.6.1)
+[![Размер бандла](https://img.shields.io/bundlephobia/minzip/slapflow?label=%D1%80%D0%B0%D0%B7%D0%BC%D0%B5%D1%80%20%D0%B1%D0%B0%D0%BD%D0%B4%D0%BB%D0%B0)](https://bundlephobia.com/package/slapflow)
+[![Безопасность Socket](https://socket.dev/api/badge/npm/package/slapflow/1.0.0)](https://socket.dev/npm/package/slapflow/overview/1.0.0)
 
-CFB берёт на себя порядок выполнения, конкурентность, отмену и диагностику. Состояние предметной области и побочные эффекты по-прежнему остаются в вашем приложении.
+Slapflow берёт на себя порядок выполнения, конкурентность, отмену и диагностику. Состояние предметной области и побочные эффекты по-прежнему остаются в вашем приложении.
 
 ## Когда он пригодится
 
@@ -17,7 +17,7 @@ CFB берёт на себя порядок выполнения, конкуре
 ## Установка
 
 ```bash
-npm install chain-functions-behavior
+npm install slapflow
 ```
 
 ## Быстрый старт
@@ -25,7 +25,7 @@ npm install chain-functions-behavior
 Пример обрабатывает отправку заказа из типизированной шины событий. Режим `latest` отменит предыдущую отправку того же заказа, когда придёт новое событие.
 
 ```ts
-import { createChainBehavior, createPubSubBehavior } from 'chain-functions-behavior'
+import { createFlow, createPubSub } from 'slapflow'
 
 type Context = {
   orders: Map<string, { id: string; status: 'draft' | 'submitted' }>
@@ -35,12 +35,12 @@ type Events = {
   'order.submit': { orderId: string }
 }
 
-const bus = createPubSubBehavior<Events>()
+const bus = createPubSub<Events>()
 const context: Context = {
   orders: new Map([['order-1', { id: 'order-1', status: 'draft' }]]),
 }
 
-const behavior = createChainBehavior<Context, unknown, Events>(
+const flow = createFlow<Context, unknown, Events>(
   {
     events: {
       '[bus] order.submit': {
@@ -70,7 +70,7 @@ const behavior = createChainBehavior<Context, unknown, Events>(
   { bus, context }
 )
 
-behavior.start()
+flow.start()
 bus.emit('order.submit', { orderId: 'order-1' }, { origin: 'api' })
 ```
 
@@ -150,9 +150,7 @@ const config = {
 }
 ```
 
-[Посмотреть схему выполнения](examples/compound-conditions.mmd).
-
-## Что даёт CFB
+## Что даёт Slapflow
 
 - Декларативные стратегии, условия, ветки обработки ошибок и точки входа.
 - Большой набор [встроенных условий](SPEC-RU.md#встроенные-условия) для сравнений, проверки типов, коллекций и составной логики.
@@ -160,12 +158,11 @@ const config = {
 - Режимы `parallel`, `latest`, `queue` и `drop` с отдельными линиями для разных сущностей.
 - WebSocket-мост для передачи выбранных событий шины.
 - `core.fetch` с разбором ответа, отменой и retry backoff.
-- Нормализованный результат, трассировку выполнения, проверку конфигурации и диагностические события вроде `cfb.run.started` и `cfb.run.failed`.
+- Нормализованный результат, трассировку выполнения, проверку конфигурации и диагностические события вроде `slapflow.run.started` и `slapflow.run.failed`.
 - Runtime-переменные для значений конфигурации, шаблонов и выражений.
 
 ## Дальше
 
-- Посмотрите на запускаемый [клиент-серверный пример Todo app](examples/todo-app): форма отправляет запрос серверному CFB runtime для валидации и сохранения в памяти.
 - Полный контракт API, встроенные действия и условия, выражения, валидация, ограничения безопасности, транспорт и жизненный цикл описаны в [спецификации](SPEC-RU.md).
 - English documentation: [README.md](README.md) and [SPEC.md](SPEC.md).
 

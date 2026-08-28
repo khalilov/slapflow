@@ -1,4 +1,4 @@
-import { type BehaviorConfig, type BehaviorValidationIssue, type BehaviorValidationResult } from '~/types'
+import { type Config, type ValidationIssue, type ValidationResult } from '~/types'
 import { detectCycles } from '~/helpers/validation/detectCycles'
 import { detectNestedLoops } from '~/helpers/validation/detectNestedLoops'
 import { validateCondition } from '~/helpers/validation/validateCondition'
@@ -7,13 +7,13 @@ import { validateRefs } from '~/helpers/validation/validateRefs'
 import { validModes } from '~/helpers/validation/validationConstants'
 import { type RegistryReader } from '~/helpers/validation/registryReader'
 
-export const validateBehaviorConfig = (
-  config: BehaviorConfig | undefined,
+export const validateConfig = (
+  config: Config | undefined,
   actionsRegistry: RegistryReader,
   conditionsRegistry: RegistryReader
-): BehaviorValidationResult => {
-  const errors: BehaviorValidationIssue[] = []
-  const warnings: BehaviorValidationIssue[] = []
+): ValidationResult => {
+  const errors: ValidationIssue[] = []
+  const warnings: ValidationIssue[] = []
 
   if (!config || typeof config !== 'object') {
     return {

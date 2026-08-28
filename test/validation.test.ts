@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { createBehaviorRunner } from '~/index'
+import { createRunner } from '~/runner'
 
 describe('validation', () => {
   it('catches unknown fn, then target and condition', () => {
-    const runner = createBehaviorRunner()
+    const runner = createRunner()
     const result = runner.validateConfig({
       strategies: {
         root: { fn: 'missing.action', then: ['missing.strategy'], when: ['missingCondition', '$context.worker'] },
@@ -18,7 +18,7 @@ describe('validation', () => {
   })
 
   it('rejects malformed then and catch items', () => {
-    const runner = createBehaviorRunner()
+    const runner = createRunner()
     const result = runner.validateConfig({
       strategies: {
         root: { fn: 'core.noop', then: [null as never], catch: [{} as never] },
@@ -30,7 +30,7 @@ describe('validation', () => {
   })
 
   it('validates props and conditions of then and catch items', () => {
-    const runner = createBehaviorRunner()
+    const runner = createRunner()
     const result = runner.validateConfig({
       strategies: {
         root: {
@@ -51,7 +51,7 @@ describe('validation', () => {
   })
 
   it('accepts variable templates and expressions', () => {
-    const runner = createBehaviorRunner()
+    const runner = createRunner()
     const result = runner.loadConfig({
       version: 1,
       entrypoints: {
@@ -77,7 +77,7 @@ describe('validation', () => {
     const malformed = ['${AUTH_SERVICE_BASE', '${1BAD}', '${FOO:bar}']
 
     for (const template of malformed) {
-      const runner = createBehaviorRunner()
+      const runner = createRunner()
       const result = runner.loadConfig({
         strategies: {
           root: { fn: 'core.noop', props: { value: { $template: template } } },
@@ -107,7 +107,7 @@ describe('validation', () => {
     ]
 
     for (const template of escaped) {
-      const runner = createBehaviorRunner()
+      const runner = createRunner()
       const result = runner.loadConfig({
         strategies: {
           root: { fn: 'core.noop', props: { value: { $template: template } } },

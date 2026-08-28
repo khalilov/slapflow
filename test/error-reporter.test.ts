@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { createBehaviorRunner, defineErrorReporter, type BehaviorErrorEvent } from '~/index'
+import { createRunner } from '~/runner'
+import { defineErrorReporter, type SlapErrorEvent } from '~/index'
 
 type Ctx = {
   user?: string
@@ -8,11 +9,11 @@ type Ctx = {
 
 describe('error reporter', () => {
   it('reports thrown action errors with execution stage and runtime state', async () => {
-    const reports: BehaviorErrorEvent<Ctx, string>[] = []
+    const reports: SlapErrorEvent<Ctx, string>[] = []
     const reporter = defineErrorReporter<Ctx, string>({
       report: (event) => reports.push(event),
     })
-    const runner = createBehaviorRunner<Ctx, string>({ onError: reporter, trace: true })
+    const runner = createRunner<Ctx, string>({ onError: reporter, trace: true })
 
     runner.registerAction('boom', () => {
       throw new Error('boom')
@@ -57,8 +58,8 @@ describe('error reporter', () => {
   })
 
   it('reports runtime.fail before catch recovery continues the chain', async () => {
-    const reports: BehaviorErrorEvent<Ctx, string>[] = []
-    const runner = createBehaviorRunner<Ctx, string>({
+    const reports: SlapErrorEvent<Ctx, string>[] = []
+    const runner = createRunner<Ctx, string>({
       onError: defineErrorReporter((event) => reports.push(event)),
     })
 
@@ -85,18 +86,18 @@ describe('error reporter', () => {
   })
 
   it('reports condition, entrypoint and limit phases', async () => {
-    const reports: BehaviorErrorEvent<Ctx>[] = []
+    const reports: SlapErrorEvent<Ctx>[] = []
     const reporter = defineErrorReporter<Ctx>((event) => reports.push(event))
 
-    const conditionRunner = createBehaviorRunner<Ctx>({ onError: reporter })
+    const conditionRunner = createRunner<Ctx>({ onError: reporter })
     conditionRunner.loadConfig({ strategies: { root: { fn: 'core.noop', when: ['missing.condition'] } } })
     await conditionRunner.run('root', {})
 
-    const entrypointRunner = createBehaviorRunner<Ctx>({ onError: reporter })
+    const entrypointRunner = createRunner<Ctx>({ onError: reporter })
     entrypointRunner.loadConfig({ strategies: { root: { fn: 'core.noop' } } })
     await entrypointRunner.run('missing', {})
 
-    const limitRunner = createBehaviorRunner<Ctx>({ onError: reporter, maxDepth: 0 })
+    const limitRunner = createRunner<Ctx>({ onError: reporter, maxDepth: 0 })
     limitRunner.loadConfig({
       strategies: {
         root: { fn: 'core.noop', then: ['next'] },

@@ -1,3 +1,3 @@
-import { type BehaviorNext } from '~/types'
+import { type Next } from '~/types'
 
-export const getNextItems = (value: unknown): BehaviorNext[] => (Array.isArray(value) ? value : [])
+export const getNextItems = (value: unknown): Next[] => (Array.isArray(value) ? value : [])

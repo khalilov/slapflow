@@ -1,8 +1,8 @@
-import { type BehaviorConfig, type BehaviorValidationIssue } from '~/types'
+import { type Config, type ValidationIssue } from '~/types'
 import { getNextItems } from '~/helpers/validation/getNextItems'
 import { getNextTarget } from '~/helpers/validation/getNextTarget'
 
-export const detectNestedLoops = (config: BehaviorConfig, errors: BehaviorValidationIssue[]): void => {
+export const detectNestedLoops = (config: Config, errors: ValidationIssue[]): void => {
   for (const [outerId, outer] of Object.entries(config.strategies)) {
     if (outer.fn !== 'core.loop') {
       continue

@@ -1,8 +1,8 @@
 import {
-  type BehaviorActionArgs,
-  type BehaviorActionResult,
-  type BehaviorFetchResponseType,
-  type BehaviorRetryOptions,
+  type ActionArgs,
+  type ActionResult,
+  type FetchResponseType,
+  type RetryOptions,
 } from '~/types'
 import { getRetryDelay } from '~/helpers/retry/getRetryDelay'
 import { waitForRetry } from '~/helpers/retry/waitForRetry'
@@ -17,13 +17,13 @@ const responseReaders = {
   blob: (response: Response) => response.blob(),
   arrayBuffer: (response: Response) => response.arrayBuffer(),
   none: async () => undefined,
-} satisfies Record<BehaviorFetchResponseType, (response: Response) => Promise<unknown>>
+} satisfies Record<FetchResponseType, (response: Response) => Promise<unknown>>
 
 export const coreFetch = async <TContext, TPatch>({
   props,
   runtime,
   signal,
-}: BehaviorActionArgs<TContext>): Promise<BehaviorActionResult<TContext, TPatch>> => {
+}: ActionArgs<TContext>): Promise<ActionResult<TContext, TPatch>> => {
   const {
     acceptStatuses,
     body,
@@ -38,7 +38,7 @@ export const coreFetch = async <TContext, TPatch>({
     url,
   } = props
   const responseType = typeof response === 'string' ? response : 'json'
-  const retry = (retryProps ?? {}) as BehaviorRetryOptions
+  const retry = (retryProps ?? {}) as RetryOptions
   const maxAttempts = Math.max(0, Number(retry.maxAttempts ?? defaultMaxAttempts))
   const acceptedStatusSet = Array.isArray(acceptStatuses) ? new Set(acceptStatuses) : undefined
   const retryStatusSet = Array.isArray(retryStatuses) ? new Set(retryStatuses) : undefined
@@ -73,7 +73,7 @@ export const coreFetch = async <TContext, TPatch>({
         let responseBody: unknown
 
         try {
-          responseBody = await responseReaders[responseType as BehaviorFetchResponseType](response)
+          responseBody = await responseReaders[responseType as FetchResponseType](response)
         } catch (cause) {
           return runtime.fail('Fetch response could not be parsed', { cause })
         }

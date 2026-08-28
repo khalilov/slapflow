@@ -1,9 +1,9 @@
-import { type BehaviorRuntimeBranchResult } from '~/types'
+import { type RuntimeBranchResult } from '~/types'
 import { type Normalized } from '~/helpers/runner/runnerTypes'
 
 export const toRuntimeResult = <TContext, TPatch>(
   result: Normalized<TContext, TPatch>
-): BehaviorRuntimeBranchResult => {
+): RuntimeBranchResult => {
   if (result.status === 'failed') {
     return { status: 'failed', error: result.error }
   }

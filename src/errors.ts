@@ -1,14 +1,14 @@
-import { type BehaviorError } from '~/types'
+import { type SlapError } from '~/types'
 
-export { behaviorError } from '~/helpers/errors/behaviorError'
+export { slapError } from '~/helpers/errors/slapError'
 export { defineErrorReporter } from '~/helpers/errors/defineErrorReporter'
 
-export class BehaviorSyncAsyncError extends Error {
-  readonly behaviorError: BehaviorError
+export class SyncAsyncError extends Error {
+  readonly slapError: SlapError
 
-  constructor(error: BehaviorError) {
+  constructor(error: SlapError) {
     super(error.message)
-    this.name = 'BehaviorSyncAsyncError'
-    this.behaviorError = error
+    this.name = 'SyncAsyncError'
+    this.slapError = error
   }
 }

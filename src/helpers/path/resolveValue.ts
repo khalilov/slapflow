@@ -1,5 +1,5 @@
 import { pick } from 'objwalk'
-import { type BehaviorExpressionOperator, type BehaviorInput, type BehaviorVariables } from '~/types'
+import { type ExpressionOperator, type Input, type Variables } from '~/types'
 import { childPath } from '~/helpers/path/childPath'
 import { createResolutionError } from '~/helpers/path/createResolutionError'
 import { evaluateExpression } from '~/helpers/path/evaluateExpression'
@@ -10,9 +10,9 @@ import { parseTemplate } from '~/helpers/path/parseTemplate'
 export type ResolveScope<TContext> = {
   context: TContext
   data: Record<string, unknown>
-  input: BehaviorInput
-  variables?: BehaviorVariables
-  expressions?: Record<string, BehaviorExpressionOperator>
+  input: Input
+  variables?: Variables
+  expressions?: Record<string, ExpressionOperator>
   strategy?: string
   configPath?: string
 }

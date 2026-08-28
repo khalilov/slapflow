@@ -1,4 +1,4 @@
-import { type BehaviorValidationIssue } from '~/types'
+import { type ValidationIssue } from '~/types'
 import { isPathReference } from '~/helpers/path/isPathReference'
 import { isValidPathReference } from '~/helpers/path/isValidPathReference'
 import { parseTemplate } from '~/helpers/path/parseTemplate'
@@ -7,7 +7,7 @@ export const validateRefs = (
   value: unknown,
   strategy: string,
   path: string,
-  errors: BehaviorValidationIssue[]
+  errors: ValidationIssue[]
 ): void => {
   if (typeof value === 'string') {
     if (isPathReference(value) && !isValidPathReference(value)) {

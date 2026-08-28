@@ -1,7 +1,7 @@
-import { type BehaviorTraceEntry, type BehaviorTraceSink } from '~/types'
+import { type TraceEntry, type TraceSink } from '~/types'
 
-export const createMemoryTraceSink = (): BehaviorTraceSink => {
-  const items: BehaviorTraceEntry[] = []
+export const createMemoryTraceSink = (): TraceSink => {
+  const items: TraceEntry[] = []
   return {
     push: (entry) => {
       items.push(entry)

@@ -1,11 +1,11 @@
-import { type BehaviorStrategy } from '~/types'
+import { type Strategy } from '~/types'
 import { executeParallel } from '~/helpers/runner/executeParallel'
 import { executeSelector } from '~/helpers/runner/executeSelector'
 import { executeSequence } from '~/helpers/runner/executeSequence'
 import { type Normalized, type RunState, type RunnerEnvironment } from '~/helpers/runner/runnerTypes'
 
 export const executeThen = <TContext, TPatch>(
-  strategy: BehaviorStrategy,
+  strategy: Strategy,
   depth: number,
   state: RunState<TContext, TPatch>,
   environment: RunnerEnvironment<TContext, TPatch>

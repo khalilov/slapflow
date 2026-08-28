@@ -1,6 +1,6 @@
-# Спецификация Chain Functions Behavior
+# Спецификация Slapflow
 
-`chain-functions-behavior` — npm-пакет для декларативного выполнения синхронных и асинхронных действий в упорядоченных цепочках с условиями выполнения, резервными ветками, трассировкой и ограничениями безопасности.
+`slapflow` — npm-пакет для декларативного выполнения синхронных и асинхронных действий в упорядоченных цепочках с условиями выполнения, резервными ветками, трассировкой и ограничениями безопасности.
 
 Пакет не привязан к интерфейсу, серверному фреймворку, планировщику или модели предметной области. Приложение регистрирует действия и условия, передаёт контекст и входные данные, а исполнитель возвращает результат выполнения цепочки.
 
@@ -12,21 +12,25 @@
 
 ```ts
 import {
-  createBehaviorRunner,
   createActionsRegistry,
   createConditionsRegistry,
   createMemoryTraceSink,
   defineErrorReporter,
-  createPubSubBehavior,
-  PubSubBehavior,
-  createChainBehavior,
-  createBehaviorWs,
+  createPubSub,
+  PubSub,
+  createFlow,
+  createWS,
   catchError,
-} from 'chain-functions-behavior'
+} from 'slapflow'
 ```
 
 ```ts
-const runner = createBehaviorRunner<Context, Patch>()
+const flow = createFlow<Context, Patch>(
+  { config: { strategies: {} } },
+  { context: () => ({} as Context) }
+)
+const runner = flow.runner
+
 runner.registerAction('jobs.execute', executeJob)
 runner.registerCondition('hasQueue', ({ context }) => context.queue.length > 0)
 
@@ -37,18 +41,18 @@ const result = await runner.run('worker.tick', context, input)
 ## Основные типы
 
 ```ts
-type BehaviorConfig = {
+type Config = {
   version?: 1
-  strategies: Record<string, BehaviorStrategy>
+  strategies: Record<string, Strategy>
   entrypoints?: Record<string, string>
 }
 
-type BehaviorStrategy = {
+type Strategy = {
   fn: string
   props?: Record<string, unknown>
-  when?: BehaviorConditionExpression
-  then?: BehaviorNext[]
-  catch?: BehaviorNext[]
+  when?: ConditionExpression
+  then?: Next[]
+  catch?: Next[]
   mode?: 'sequence' | 'selector' | 'parallel'
   terminal?: boolean
 }
@@ -59,7 +63,7 @@ type BehaviorStrategy = {
 Исполнитель работает как декларативный конвейер try/catch: действие может вернуть `runtime.fail(...)` или выбросить исключение, стратегия может определить `catch`, а приложение — централизованно сообщать об ошибках через `onError`.
 
 ```ts
-const reportBehaviorError = defineErrorReporter({
+const reportError = defineErrorReporter({
   report: ({ error, context, input, data, patches, events, trace }) => {
     Sentry.captureException(error.cause ?? error, {
       tags: {
@@ -73,35 +77,35 @@ const reportBehaviorError = defineErrorReporter({
   },
 })
 
-const runner = createBehaviorRunner({
-  trace: true,
-  onError: reportBehaviorError,
-})
+const flow = createFlow(
+  { config: { strategies: {} } },
+  { context: () => ({} as Context), trace: true, onError: reportError }
+)
 ```
 
-`onError` получает `BehaviorErrorEvent`:
+`onError` получает `SlapErrorEvent`:
 
 ```ts
-type BehaviorErrorEvent<TContext, TPatch> = {
-  error: BehaviorError
+type SlapErrorEvent<TContext, TPatch> = {
+  error: SlapError
   context: TContext
-  input: BehaviorInput
+  input: Input
   data: Record<string, unknown>
   patches: TPatch[]
-  events: BehaviorEvent[]
-  trace?: BehaviorTraceEntry[]
+  events: SlapEvent[]
+  trace?: TraceEntry[]
 }
 ```
 
-`BehaviorError.stage` определяет фазу цепочки:
+`SlapError.stage` определяет фазу цепочки:
 
 ```ts
-type BehaviorErrorStage = {
+type ErrorStage = {
   phase: 'entrypoint' | 'condition' | 'action' | 'catch' | 'limit'
   entrypoint?: string
   strategy?: string
   fn?: string
-  mode?: BehaviorMode
+  mode?: Mode
   step?: number
   depth?: number
 }
@@ -224,7 +228,7 @@ export const config = {
 ## Вспомогательные средства среды выполнения
 
 ```ts
-type BehaviorRuntime = {
+type Runtime = {
   get(path: string): unknown
   set(path: string, value: unknown): void
   data: {
@@ -240,12 +244,12 @@ type BehaviorRuntime = {
   setData(path: string, value: unknown): void
   resolve(value: unknown): unknown
   signal: AbortSignal
-  executeThen(): Promise<BehaviorRuntimeBranchResult>
-  executeCatch(): Promise<BehaviorRuntimeBranchResult | undefined>
-  emit(event: BehaviorEvent): void
+  executeThen(): Promise<RuntimeBranchResult>
+  executeCatch(): Promise<RuntimeBranchResult | undefined>
+  emit(event: SlapEvent): void
   patch(patch: unknown): void
-  stop(reason?: string): BehaviorActionStop<unknown>
-  fail(reason?: string, data?: Record<string, unknown>): BehaviorActionFail
+  stop(reason?: string): ActionStop<unknown>
+  fail(reason?: string, data?: Record<string, unknown>): ActionFail
 }
 ```
 
@@ -285,14 +289,14 @@ type BehaviorRuntime = {
 
 ## Шина публикации и подписки
 
-`PubSubBehavior` — локальная для процесса шина событий-одиночка. Для изолированных сред выполнения используйте `createPubSubBehavior`.
+`PubSub` — локальная для процесса шина событий-одиночка. Для изолированных сред выполнения используйте `createPubSub`.
 
 ```ts
 type AppEvents = {
   'auth.signed-in': { userId: string }
 }
 
-const bus = createPubSubBehavior<AppEvents>()
+const bus = createPubSub<AppEvents>()
 const unsubscribe = bus.on('auth.signed-in', ({ parsed, serialized }) => {
   console.log(parsed.userId)
   socket.send(serialized)
@@ -303,20 +307,20 @@ unsubscribe()
 ```
 
 ```ts
-type BehaviorBus<TEvents extends object = Record<string, unknown>> = {
+type Bus<TEvents extends object = Record<string, unknown>> = {
   on<TEvent extends keyof TEvents>(
     event: TEvent,
-    handler: (event: BehaviorBusEvent<TEvents[TEvent]>) => void
+    handler: (event: BusEvent<TEvents[TEvent]>) => void
   ): () => void
-  off<TEvent extends keyof TEvents>(event: TEvent, handler?: (event: BehaviorBusEvent<TEvents[TEvent]>) => void): void
+  off<TEvent extends keyof TEvents>(event: TEvent, handler?: (event: BusEvent<TEvents[TEvent]>) => void): void
   emit<TEvent extends keyof TEvents>(
     topic: TEvent,
     payload: TEvents[TEvent],
     options?: { origin?: string }
-  ): BehaviorBusEvent<TEvents[TEvent]>
+  ): BusEvent<TEvents[TEvent]>
 }
 
-type BehaviorBusEvent<TPayload> = {
+type BusEvent<TPayload> = {
   id: string
   topic: string
   occurredAt: number
@@ -326,18 +330,18 @@ type BehaviorBusEvent<TPayload> = {
 }
 ```
 
-`emit` создаёт конверт и сериализует полезную нагрузку один раз до запуска подписчиков. Идентификаторы событий — непрозрачные 12-символьные буквенно-цифровые runtime-ID для корреляции и подавления эха. Они не криптографически стойкие: не используйте их для access token, подписей, публичных ссылок или иных security-sensitive задач. `on` возвращает функцию отписки. `off(event, handler)` удаляет один обработчик, а `off(event)` очищает канал. Ошибка одного подписчика не блокирует остальных; `createPubSubBehavior({ onError })` получает ошибку и исходное событие. При ошибке сериализации шина передаёт `{ error }` в качестве `parsed` и тело ошибки в качестве `serialized`, после чего вызывает `onError` с исходной причиной.
+`emit` создаёт конверт и сериализует полезную нагрузку один раз до запуска подписчиков. Идентификаторы событий — непрозрачные 12-символьные буквенно-цифровые runtime-ID для корреляции и подавления эха. Они не криптографически стойкие: не используйте их для access token, подписей, публичных ссылок или иных security-sensitive задач. `on` возвращает функцию отписки. `off(event, handler)` удаляет один обработчик, а `off(event)` очищает канал. Ошибка одного подписчика не блокирует остальных; `createPubSub({ onError })` получает ошибку и исходное событие. При ошибке сериализации шина передаёт `{ error }` в качестве `parsed` и тело ошибки в качестве `serialized`, после чего вызывает `onError` с исходной причиной.
 
-## Цепочка поведения
+## Поток
 
-`createChainBehavior` объединяет конфигурацию, действия, условия, поставщик контекста и привязки событий. Функция создаёт исполнитель и поддерживает жизненный цикл `start`/`stop`.
+`createFlow` объединяет конфигурацию, действия, условия, поставщик контекста и привязки событий. Функция создаёт исполнитель (доступный через `flow.runner`) и поддерживает жизненный цикл `start`/`stop`.
 
 ```ts
 type Events = {
   'form.submit': { email: string }
 }
 
-const behavior = createChainBehavior<Context, Patch, Events>(
+const flow = createFlow<Context, Patch, Events>(
   {
     actions: { 'form.save': saveForm },
     conditions: { allowed: isAllowed },
@@ -347,30 +351,30 @@ const behavior = createChainBehavior<Context, Patch, Events>(
   { bus, context: () => appStore.getState() }
 )
 
-const started = behavior.start()
-behavior.stop()
+const started = flow.start()
+flow.stop()
 ```
 
 Привязка `[bus] <event-name>` запускает `entrypoint` из `config.entrypoints`. Полезная нагрузка события должна быть объектом и передаётся исполнителю как `input`. Контекст считывается для каждого события, поэтому поставщик контекста возвращает актуальное состояние.
 
 ```ts
-type BehaviorStartResult = {
+type StartResult = {
   active: string[]
   inactive: Array<{ binding: string; reason: 'unsupported-source' }>
-  validation: BehaviorValidationResult
+  validation: ValidationResult
 }
 ```
 
 `start()` регистрирует действия и условия, проверяет и загружает конфигурацию. Если проверка завершилась ошибкой, привязки не устанавливаются. Повторный вызов `start()` заменяет существующие привязки. `stop()` освобождает только подписки, принадлежащие текущему поведению.
 
-`onRunnerError` в `ChainBehaviorOptions` вызывается только тогда, когда итоговый `BehaviorRunResult.status === 'failed'`. Колбэк получает `error`, `result`, `binding`, `entrypoint`, `runId` и необязательный `key`. Ошибка, обработанная стратегией через `catch`, не вызывает `onRunnerError`.
+`onRunnerError` в `FlowOptions` вызывается только тогда, когда итоговый `RunResult.status === 'failed'`. Колбэк получает `error`, `result`, `binding`, `entrypoint`, `runId` и необязательный `key`. Ошибка, обработанная стратегией через `catch`, не вызывает `onRunnerError`.
 
 ### Конкурентное выполнение
 
 Каждая привязка поддерживает `parallel`, `latest`, `queue` и `drop`. Режим по умолчанию — `parallel`. Управление конкурентностью действует в пределах одной привязки и линии; `key(payload)` создаёт независимые линии.
 
 ```ts
-type BehaviorConcurrencyOptions<TPayload> = {
+type ConcurrencyOptions<TPayload> = {
   mode?: 'parallel' | 'latest' | 'queue' | 'drop'
   key?: (payload: TPayload) => string
   maxQueueSize?: number
@@ -378,22 +382,22 @@ type BehaviorConcurrencyOptions<TPayload> = {
 }
 ```
 
-Параметры задаются глобально в `createChainBehavior` и могут быть переопределены привязкой. Размер `queue` ограничен параметром `maxQueueSize`, который по умолчанию равен `50`. При переполнении CFB публикует `cfb.queue.overflow` и `cfb.run.dropped`.
+Параметры задаются глобально в `createFlow` и могут быть переопределены привязкой. Размер `queue` ограничен параметром `maxQueueSize`, который по умолчанию равен `50`. При переполнении Slapflow публикует `slapflow.queue.overflow` и `slapflow.run.dropped`.
 
-`BehaviorActionArgs` и `BehaviorRuntime` содержат `signal: AbortSignal`. Режим `latest` прерывает предыдущий запуск в той же линии. `behavior.stop({ force: true })` прерывает все активные запуски; обычный `stop()` удаляет привязки, но не отменяет выполняющиеся действия. Прерывание является кооперативным: действие использует сигнал для запросов, таймеров и собственной асинхронной работы.
+`ActionArgs` и `Runtime` содержат `signal: AbortSignal`. Режим `latest` прерывает предыдущий запуск в той же линии. `flow.stop({ force: true })` прерывает все активные запуски; обычный `stop()` удаляет привязки, но не отменяет выполняющиеся действия. Прерывание является кооперативным: действие использует сигнал для запросов, таймеров и собственной асинхронной работы.
 
 Диагностика жизненного цикла публикуется через настроенную шину:
 
-- `cfb.run.started`;
-- `cfb.run.finished`;
-- `cfb.run.failed`;
-- `cfb.run.cancelled`;
-- `cfb.run.dropped`;
-- `cfb.queue.overflow`.
+- `slapflow.run.started`;
+- `slapflow.run.finished`;
+- `slapflow.run.failed`;
+- `slapflow.run.cancelled`;
+- `slapflow.run.dropped`;
+- `slapflow.queue.overflow`.
 
 ### DOM-привязки
 
-Ключ DOM-привязки имеет формат `[dom] <css-selector>:<event>`. CFB устанавливает делегированный слушатель на `options.root` или `document`. В среде без DOM привязка добавляется в `inactive` с причиной `dom-unavailable`.
+Ключ DOM-привязки имеет формат `[dom] <css-selector>:<event>`. Slapflow устанавливает делегированный слушатель на `options.root` или `document`. В среде без DOM привязка добавляется в `inactive` с причиной `dom-unavailable`.
 
 ```ts
 '[dom] .app-button[type="submit"]:click': {
@@ -413,14 +417,14 @@ type BehaviorConcurrencyOptions<TPayload> = {
 
 ### WebSocket-мост
 
-`createBehaviorWs` подключает шину к WebSocket-подобному транспорту. Мост принимает `createSocket`, поэтому одинаково работает с браузерным WebSocket и серверным адаптером.
+`createWS` подключает шину к WebSocket-подобному транспорту. Мост принимает `createSocket`, поэтому одинаково работает с браузерным WebSocket и серверным адаптером.
 
 ```ts
-const ws = createBehaviorWs({
+const ws = createWS({
   bus,
   createSocket: () => new WebSocket(url),
   inboundTopics: ['order.created'],
-  outboundTopics: ['cfb.run.finished'],
+  outboundTopics: ['slapflow.run.finished'],
   origin: 'worker',
   retry: { initialDelay: 500, maxDelay: 10_000, multiplier: 2, jitter: true, maxAttempts: 5 },
 })
@@ -428,7 +432,7 @@ const ws = createBehaviorWs({
 ws.start()
 ```
 
-Входящие темы проходят через явный список разрешений. Мост разбирает JSON-конверт и вызывает `bus.dispatch(event)`, сохраняя `id`, `occurredAt`, `origin`, `parsed` и `serialized`; принятые входящие идентификаторы запоминаются и не отправляются обратно наружу. Исходящие темы отправляют полный JSON-конверт события, поэтому удалённый мост может передать его в шину, не создавая новый идентификатор. `maxAttempts` ограничивает reconnect; без него повторы идут бесконечно. `start`, `stop`, `reconnect` и `status` управляют жизненным циклом транспорта. Диагностические события: `cfb.ws.connecting`, `cfb.ws.connected`, `cfb.ws.disconnected`, `cfb.ws.retrying` и `cfb.ws.message.rejected`.
+Входящие темы проходят через явный список разрешений. Мост разбирает JSON-конверт и вызывает `bus.dispatch(event)`, сохраняя `id`, `occurredAt`, `origin`, `parsed` и `serialized`; принятые входящие идентификаторы запоминаются и не отправляются обратно наружу. Исходящие темы отправляют полный JSON-конверт события, поэтому удалённый мост может передать его в шину, не создавая новый идентификатор. `maxAttempts` ограничивает reconnect; без него повторы идут бесконечно. `start`, `stop`, `reconnect` и `status` управляют жизненным циклом транспорта. Диагностические события: `slapflow.ws.connecting`, `slapflow.ws.connected`, `slapflow.ws.disconnected`, `slapflow.ws.retrying` и `slapflow.ws.message.rejected`.
 
 ## Ограничения безопасности
 

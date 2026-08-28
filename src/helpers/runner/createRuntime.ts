@@ -1,13 +1,13 @@
 import { pick, set } from 'objwalk'
-import { type BehaviorRuntime, type BehaviorRuntimeBranchResult } from '~/types'
+import { type Runtime, type RuntimeBranchResult } from '~/types'
 import { type RunState } from '~/helpers/runner/runnerTypes'
 import { resolveValue } from '~/helpers/path/resolveValue'
 import { stopResult } from '~/helpers/runner/stopResult'
 import { protectedPickOptions } from '~/helpers/path/protectedPickOptions'
 
 type RuntimeBranches = {
-  executeThen(): Promise<BehaviorRuntimeBranchResult>
-  executeCatch(): Promise<BehaviorRuntimeBranchResult | undefined>
+  executeThen(): Promise<RuntimeBranchResult>
+  executeCatch(): Promise<RuntimeBranchResult | undefined>
 }
 
 export const createRuntime = <TContext, TPatch>(
@@ -16,7 +16,7 @@ export const createRuntime = <TContext, TPatch>(
     executeThen: async () => ({ status: 'success' }),
     executeCatch: async () => undefined,
   }
-): BehaviorRuntime => {
+): Runtime => {
   const data = {
     get: (path: string) => pick(state.data, path),
     set: (path: string, value: unknown) => {

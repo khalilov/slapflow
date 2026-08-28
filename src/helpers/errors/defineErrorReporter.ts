@@ -1,5 +1,5 @@
-import { type BehaviorErrorReporter, type BehaviorErrorReporterHandlers } from '~/types'
+import { type ErrorReporter, type ErrorReporterHandlers } from '~/types'
 
 export const defineErrorReporter = <TContext, TPatch = unknown>(
-  handlers: BehaviorErrorReporterHandlers<TContext, TPatch> | BehaviorErrorReporter<TContext, TPatch>
-): BehaviorErrorReporter<TContext, TPatch> => (typeof handlers === 'function' ? handlers : handlers.report)
+  handlers: ErrorReporterHandlers<TContext, TPatch> | ErrorReporter<TContext, TPatch>
+): ErrorReporter<TContext, TPatch> => (typeof handlers === 'function' ? handlers : handlers.report)

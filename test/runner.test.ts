@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it, vi } from 'vitest'
-import { createBehaviorRunner } from '~/index'
+import { createRunner } from '~/runner'
 
 type Ctx = {
   worker?: { state?: string; queueSize?: number }
@@ -10,9 +10,9 @@ type Ctx = {
   target?: string
 }
 
-describe('behavior runner', () => {
+describe('runner', () => {
   it('sequence executes in order and collects patches', async () => {
-    const runner = createBehaviorRunner<Ctx, string>()
+    const runner = createRunner<Ctx, string>()
     runner.registerActions({
       a: () => ({ patch: 'a' }),
       b: () => ({ patch: 'b' }),
@@ -31,7 +31,7 @@ describe('behavior runner', () => {
   })
 
   it('selector stops on first successful branch and treats false as skip', async () => {
-    const runner = createBehaviorRunner<Ctx, string>()
+    const runner = createRunner<Ctx, string>()
     runner.registerActions({
       skip: () => false,
       win: () => ({ patch: 'win' }),
@@ -52,7 +52,7 @@ describe('behavior runner', () => {
   })
 
   it('thrown error invokes catch', async () => {
-    const runner = createBehaviorRunner<Ctx, string>()
+    const runner = createRunner<Ctx, string>()
     runner.registerActions({
       boom: () => {
         throw new Error('boom')
@@ -67,7 +67,7 @@ describe('behavior runner', () => {
   })
 
   it('marks a failed recovery branch with the catch phase', async () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     runner.registerActions({
       boom: () => {
         throw new Error('boom')
@@ -90,14 +90,14 @@ describe('behavior runner', () => {
   })
 
   it('reports missing action and missing strategy', async () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     runner.loadConfig({ strategies: { root: { fn: 'missing' } } })
     assert.equal((await runner.run('root', {})).error?.code, 'ACTION_NOT_FOUND')
     assert.equal((await runner.run('absent', {})).error?.code, 'STRATEGY_NOT_FOUND')
   })
 
   it('when reads context, data and input', async () => {
-    const runner = createBehaviorRunner<Ctx, string>()
+    const runner = createRunner<Ctx, string>()
     runner.registerAction('mark', () => ({ patch: 'ok' }))
     runner.loadConfig({
       strategies: {
@@ -122,13 +122,13 @@ describe('behavior runner', () => {
   })
 
   it('runSync throws on async action', () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     runner.loadConfig({ strategies: { root: { fn: 'core.delay', props: { ms: 0 } } } })
     assert.throws(() => runner.runSync('root', {}), /async action|Promise/)
   })
 
   it('core.delay settles promptly when the run is aborted', async () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     const controller = new AbortController()
     const startedAt = Date.now()
 
@@ -140,7 +140,7 @@ describe('behavior runner', () => {
   })
 
   it('core.loop executes then on every interval until aborted', async () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     const controller = new AbortController()
     let calls = 0
 
@@ -164,7 +164,7 @@ describe('behavior runner', () => {
   })
 
   it('core.loop executes the first iteration immediately when configured', async () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     const controller = new AbortController()
     let calls = 0
 
@@ -188,7 +188,7 @@ describe('behavior runner', () => {
   })
 
   it('core.loop counts the immediate iteration toward max', async () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     let calls = 0
 
     runner.registerAction('tick', () => {
@@ -208,7 +208,7 @@ describe('behavior runner', () => {
   })
 
   it('core.loop stops after the configured maximum number of iterations', async () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     let calls = 0
 
     runner.registerAction('tick', () => {
@@ -228,7 +228,7 @@ describe('behavior runner', () => {
   })
 
   it('core.loop treats max -1 as unlimited until aborted', async () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     const controller = new AbortController()
     let calls = 0
 
@@ -255,7 +255,7 @@ describe('behavior runner', () => {
     vi.useFakeTimers()
 
     try {
-      const runner = createBehaviorRunner<Ctx>({ maxStepCount: -1 })
+      const runner = createRunner<Ctx>({ maxStepCount: -1 })
       let calls = 0
 
       runner.registerAction('tick', () => {
@@ -288,7 +288,7 @@ describe('behavior runner', () => {
     vi.useFakeTimers()
 
     try {
-      const runner = createBehaviorRunner<Ctx>({ maxStepCount: -1 })
+      const runner = createRunner<Ctx>({ maxStepCount: -1 })
       let calls = 0
 
       runner.registerAction('tick', () => {
@@ -313,7 +313,7 @@ describe('behavior runner', () => {
   })
 
   it('core.loop resolves on abort even if the then branch never settles', async () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     const controller = new AbortController()
 
     runner.registerAction('stuck', () => new Promise<void>(() => {}))
@@ -331,7 +331,7 @@ describe('behavior runner', () => {
   })
 
   it('core.loop executes its then branch in parallel mode', async () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     const controller = new AbortController()
     let active = 0
     let maxActive = 0
@@ -365,7 +365,7 @@ describe('behavior runner', () => {
   })
 
   it('maxStepCount stops cycles', async () => {
-    const runner = createBehaviorRunner<Ctx>({ maxStepCount: 3 })
+    const runner = createRunner<Ctx>({ maxStepCount: 3 })
     runner.loadConfig({ strategies: { root: { fn: 'core.noop', then: ['root'] } } })
     const result = await runner.run('root', {})
     assert.equal(result.status, 'failed')
@@ -373,7 +373,7 @@ describe('behavior runner', () => {
   })
 
   it('shares maxStepCount across parallel branches', async () => {
-    const runner = createBehaviorRunner<Ctx>({ maxStepCount: 2 })
+    const runner = createRunner<Ctx>({ maxStepCount: 2 })
     runner.loadConfig({
       strategies: {
         root: { fn: 'core.parallel', mode: 'parallel', then: ['first', 'second'] },
@@ -390,7 +390,7 @@ describe('behavior runner', () => {
   })
 
   it('trace contains strategy props status and duration', async () => {
-    const runner = createBehaviorRunner<Ctx>({ trace: true })
+    const runner = createRunner<Ctx>({ trace: true })
     runner.loadConfig({ strategies: { root: { fn: 'core.noop', props: { x: 1 } } } })
     const result = await runner.run('root', {})
     assert.deepEqual(
@@ -405,7 +405,7 @@ describe('behavior runner', () => {
   })
 
   it('parallel preserves patch order from config', async () => {
-    const runner = createBehaviorRunner<Ctx, string>()
+    const runner = createRunner<Ctx, string>()
     runner.registerActions({
       slow: async () => {
         await new Promise((r) => setTimeout(r, 5))
@@ -426,7 +426,7 @@ describe('behavior runner', () => {
 
   it('parallel isolates nested runtime data and accepts service context values', async () => {
     const service = () => undefined
-    const runner = createBehaviorRunner<{ service: () => void }, string>()
+    const runner = createRunner<{ service: () => void }, string>()
     runner.registerActions({
       prepare: ({ runtime }) => runtime.data.set('shared', { value: 'initial' }),
       write: ({ runtime }) => runtime.data.set('shared.value', 'changed'),
@@ -454,7 +454,7 @@ describe('behavior runner', () => {
       .mockResolvedValueOnce(new Response('unavailable', { status: 503 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'order-1' }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     runner.loadConfig({
       strategies: {
         root: {
@@ -490,7 +490,7 @@ describe('behavior runner', () => {
       .mockResolvedValueOnce(new Response('ready', { status: 200 }))
       .mockResolvedValueOnce(new Response(new Blob(['image'], { type: 'image/png' }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     runner.loadConfig({
       strategies: {
         text: { fn: 'core.fetch', props: { url: 'https://example.test/status', response: 'text', dataPath: 'text' } },
@@ -507,7 +507,7 @@ describe('behavior runner', () => {
   })
 
   it('isolates context mutations in parallel branches', async () => {
-    const runner = createBehaviorRunner<{ values: Record<string, boolean> }>()
+    const runner = createRunner<{ values: Record<string, boolean> }>()
     runner.registerActions({
       first: ({ runtime }) => runtime.set('values.first', true),
       second: ({ runtime }) => runtime.set('values.second', true),
@@ -526,7 +526,7 @@ describe('behavior runner', () => {
   })
 
   it('ui flow returns events', async () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     runner.loadConfig({
       strategies: { root: { fn: 'core.emit', props: { type: 'ui.message', payload: { text: 'ok' } } } },
     })

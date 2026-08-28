@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, it, vi } from 'vitest'
-import { createBehaviorRunner } from '~/index'
+import { createRunner } from '~/runner'
 
 const runFetch = async (props: Record<string, unknown>, signal?: AbortSignal) => {
-  const runner = createBehaviorRunner()
+  const runner = createRunner()
 
   runner.loadConfig({ strategies: { root: { fn: 'core.fetch', props } } })
 

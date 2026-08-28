@@ -1,6 +1,6 @@
 import { pick } from 'objwalk'
-import { type BehaviorExpressionOperator } from '~/types'
-import { behaviorError } from '~/helpers/errors/behaviorError'
+import { type ExpressionOperator } from '~/types'
+import { slapError } from '~/helpers/errors/slapError'
 import { type ExpressionDetails } from '~/helpers/path/expressionDetails'
 import { failExpression } from '~/helpers/path/failExpression'
 import { finiteNumbers } from '~/helpers/path/finiteNumbers'
@@ -11,7 +11,7 @@ import { protectedPickOptions } from '~/helpers/path/protectedPickOptions'
 export const evaluateExpression = (
   operator: string,
   args: unknown[],
-  custom: Record<string, BehaviorExpressionOperator>,
+  custom: Record<string, ExpressionOperator>,
   details: ExpressionDetails
 ): unknown => {
   if (operator === 'add') {
@@ -109,14 +109,14 @@ export const evaluateExpression = (
   if (!Object.prototype.hasOwnProperty.call(custom, operator)) {
     failExpression('EXPRESSION_OPERATOR_NOT_FOUND', `Expression operator "${operator}" is not registered`, details)
   }
-  const customOperator = custom[operator] as BehaviorExpressionOperator
+  const customOperator = custom[operator] as ExpressionOperator
 
   try {
     return customOperator(args)
   } catch (cause) {
     const causeType = cause instanceof Error ? 'Error' : typeof cause
     throw new ResolutionError(
-      behaviorError('EXPRESSION_INVALID_ARGUMENT', `Expression operator "${operator}" rejected its arguments`, {
+      slapError('EXPRESSION_INVALID_ARGUMENT', `Expression operator "${operator}" rejected its arguments`, {
         ...details,
         cause: { type: causeType },
       })

@@ -1,11 +1,11 @@
-import { type BehaviorError } from '~/types'
+import { type SlapError } from '~/types'
 
 export class ResolutionError extends Error {
-  readonly behaviorError: BehaviorError
+  readonly slapError: SlapError
 
-  constructor(behaviorError: BehaviorError) {
-    super(behaviorError.message)
+  constructor(slapError: SlapError) {
+    super(slapError.message)
     this.name = 'ResolutionError'
-    this.behaviorError = behaviorError
+    this.slapError = slapError
   }
 }

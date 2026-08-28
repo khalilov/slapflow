@@ -1,4 +1,4 @@
-import { type BehaviorActionResult, type BehaviorProps, type BehaviorStrategy } from '~/types'
+import { type ActionResult, type Props, type Strategy } from '~/types'
 import { applyResult } from '~/helpers/runner/applyResult'
 import { executeThen } from '~/helpers/runner/executeThen'
 import { handleFailure } from '~/helpers/runner/handleFailure'
@@ -9,12 +9,12 @@ import { withErrorStage } from '~/helpers/errors/withErrorStage'
 import { type Normalized, type RunState, type RunnerEnvironment } from '~/helpers/runner/runnerTypes'
 
 export const afterAction = <TContext, TPatch>(
-  raw: BehaviorActionResult<TContext, TPatch>,
+  raw: ActionResult<TContext, TPatch>,
   id: string,
-  strategy: BehaviorStrategy,
+  strategy: Strategy,
   depth: number,
   state: RunState<TContext, TPatch>,
-  props: BehaviorProps,
+  props: Props,
   dataBefore: Record<string, unknown>,
   traceStep: number,
   startedAt: number,

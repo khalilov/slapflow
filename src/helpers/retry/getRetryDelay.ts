@@ -1,6 +1,6 @@
-import { type BehaviorRetryOptions } from '~/types'
+import { type RetryOptions } from '~/types'
 
-export const getRetryDelay = (attempt: number, options: BehaviorRetryOptions): number => {
+export const getRetryDelay = (attempt: number, options: RetryOptions): number => {
   const { initialDelay = 500, maxDelay = 10_000, multiplier = 2, jitter } = options
   const delay = Math.min(initialDelay * multiplier ** attempt, maxDelay)
 

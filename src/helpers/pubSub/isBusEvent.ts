@@ -1,6 +1,6 @@
-import { type BehaviorBusEvent } from '~/types'
+import { type BusEvent } from '~/types'
 
-export const isBehaviorBusEvent = (event: unknown): event is BehaviorBusEvent => {
+export const isBusEvent = (event: unknown): event is BusEvent => {
   if (!event || typeof event !== 'object') {
     return false
   }

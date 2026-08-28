@@ -1,11 +1,11 @@
 import {
-  type BehaviorConfig,
-  type BehaviorError,
-  type BehaviorEvent,
-  type BehaviorInput,
-  type BehaviorRunnerOptions,
-  type BehaviorTraceSink,
-  type BehaviorVariables,
+  type Config,
+  type SlapError,
+  type SlapEvent,
+  type Input,
+  type RunnerOptions,
+  type TraceSink,
+  type Variables,
 } from '~/types'
 import { type ActionsRegistry } from '~/registry/actions'
 import { type ConditionsRegistry } from '~/registry/conditions'
@@ -17,13 +17,13 @@ export type Normalized<TContext, TPatch> =
       data?: Record<string, unknown>
       continue?: boolean
       patches: TPatch[]
-      events: [] | BehaviorEvent[]
+      events: [] | SlapEvent[]
     }
   | { status: 'skipped'; reason?: string; data?: Record<string, unknown>; patches: TPatch[]; events: [] }
-  | { status: 'stopped'; reason?: string; patches: TPatch[]; events: [] | BehaviorEvent[] }
+  | { status: 'stopped'; reason?: string; patches: TPatch[]; events: [] | SlapEvent[] }
   | {
       status: 'failed'
-      error: BehaviorError
+      error: SlapError
       data?: Record<string, unknown>
       handled?: boolean
       patches: TPatch[]
@@ -32,26 +32,26 @@ export type Normalized<TContext, TPatch> =
 
 export type RunState<TContext, TPatch> = {
   context: TContext
-  input: BehaviorInput
+  input: Input
   data: Record<string, unknown>
   patches: TPatch[]
-  events: BehaviorEvent[]
+  events: SlapEvent[]
   stepCounter: { current: number }
   startedAt: number
   sync: boolean
   signal: AbortSignal
   abort(): void
   closed: boolean
-  reportedErrors: BehaviorError[]
-  variables: BehaviorVariables
-  expressions: Record<string, import('~/types').BehaviorExpressionOperator>
-  traceSink?: BehaviorTraceSink
+  reportedErrors: SlapError[]
+  variables: Variables
+  expressions: Record<string, import('~/types').ExpressionOperator>
+  traceSink?: TraceSink
 }
 
 export type RunnerEnvironment<TContext, TPatch> = {
   actionsRegistry: ActionsRegistry<TContext, TPatch>
   conditionsRegistry: ConditionsRegistry<TContext>
-  configRef: { current?: BehaviorConfig }
-  options: BehaviorRunnerOptions<TContext, TPatch>
+  configRef: { current?: Config }
+  options: RunnerOptions<TContext, TPatch>
   mergeData: (current: Record<string, unknown>, next: Record<string, unknown>) => Record<string, unknown>
 }

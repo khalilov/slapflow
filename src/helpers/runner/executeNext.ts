@@ -1,11 +1,11 @@
-import { type BehaviorNext } from '~/types'
+import { type Next } from '~/types'
 import { evaluateCondition } from '~/helpers/runner/evaluateCondition'
 import { createRuntime } from '~/helpers/runner/createRuntime'
 import { executeStrategy } from '~/helpers/runner/executeStrategy'
 import { type Normalized, type RunState, type RunnerEnvironment } from '~/helpers/runner/runnerTypes'
 
 export const executeNext = <TContext, TPatch>(
-  item: BehaviorNext,
+  item: Next,
   depth: number,
   state: RunState<TContext, TPatch>,
   environment: RunnerEnvironment<TContext, TPatch>

@@ -1,1 +1,1 @@
-export { validateBehaviorConfig } from '~/helpers/validation/validateBehaviorConfig'
+export { validateConfig } from '~/helpers/validation/validateConfig'

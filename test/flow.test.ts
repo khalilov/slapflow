@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { createChainBehavior, createPubSubBehavior, type BehaviorBus, type BehaviorEventMap } from '~/index'
+import { createFlow, createPubSub, type Bus, type EventMap } from '~/index'
 
 type Context = {
   requestId: string
@@ -12,11 +12,11 @@ type Events = {
 
 const flush = async (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
-describe('chain behavior', () => {
+describe('flow', () => {
   it('runs a configured entrypoint when a bound bus event is emitted', () => {
-    const bus = createPubSubBehavior<Events>()
+    const bus = createPubSub<Events>()
     const received: Array<{ context: Context; input: Events['form.submit'] }> = []
-    const behavior = createChainBehavior<Context, unknown, Events>(
+    const chain = createFlow<Context, unknown, Events>(
       {
         actions: {
           'form.save': ({ context, input }) => {
@@ -34,7 +34,7 @@ describe('chain behavior', () => {
       { bus, context: () => ({ requestId: 'request-1' }) }
     )
 
-    const started = behavior.start()
+    const started = chain.start()
     bus.emit('form.submit', { email: 'ada@example.com' })
 
     assert.deepEqual(started.active, ['[bus] form.submit'])
@@ -44,14 +44,14 @@ describe('chain behavior', () => {
   })
 
   it('drops external bus envelopes with a non-object payload', () => {
-    const bus = createPubSubBehavior<Events>()
+    const bus = createPubSub<Events>()
     const diagnostics: string[] = []
     let calls = 0
-    const diagnosticBus = bus as BehaviorBus<BehaviorEventMap>
-    diagnosticBus.on('cfb.run.dropped', ({ parsed }) =>
+    const diagnosticBus = bus as Bus<EventMap>
+    diagnosticBus.on('slapflow.run.dropped', ({ parsed }) =>
       diagnostics.push(String((parsed as { reason?: unknown }).reason))
     )
-    const behavior = createChainBehavior<Context, unknown, Events>(
+    const chain = createFlow<Context, unknown, Events>(
       {
         actions: {
           save: () => {
@@ -67,7 +67,7 @@ describe('chain behavior', () => {
       { bus, context: { requestId: 'request-1' } }
     )
 
-    behavior.start()
+    chain.start()
     diagnosticBus.dispatch({
       id: 'external-1',
       topic: 'form.submit',
@@ -81,10 +81,10 @@ describe('chain behavior', () => {
   })
 
   it('uses fresh context for each bus event and removes bindings when stopped', () => {
-    const bus = createPubSubBehavior<Events>()
+    const bus = createPubSub<Events>()
     const requestIds: string[] = []
     let request = 0
-    const behavior = createChainBehavior<Context, unknown, Events>(
+    const chain = createFlow<Context, unknown, Events>(
       {
         actions: {
           save: ({ context }) => {
@@ -103,19 +103,19 @@ describe('chain behavior', () => {
       }
     )
 
-    behavior.start()
+    chain.start()
     bus.emit('form.submit', { email: 'ada@example.com' })
     bus.emit('form.submit', { email: 'grace@example.com' })
-    behavior.stop()
+    chain.stop()
     bus.emit('form.submit', { email: 'lin@example.com' })
 
     assert.deepEqual(requestIds, ['request-1', 'request-2'])
   })
 
   it('replaces bindings when started again', () => {
-    const bus = createPubSubBehavior<Events>()
+    const bus = createPubSub<Events>()
     let calls = 0
-    const behavior = createChainBehavior<Context, unknown, Events>(
+    const chain = createFlow<Context, unknown, Events>(
       {
         actions: {
           save: () => {
@@ -131,16 +131,16 @@ describe('chain behavior', () => {
       { bus, context: { requestId: 'request-1' } }
     )
 
-    behavior.start()
-    behavior.start()
+    chain.start()
+    chain.start()
     bus.emit('form.submit', { email: 'ada@example.com' })
 
     assert.equal(calls, 1)
   })
 
   it('does not activate bindings when config validation fails', () => {
-    const bus = createPubSubBehavior<Events>()
-    const behavior = createChainBehavior<Context, unknown, Events>(
+    const bus = createPubSub<Events>()
+    const chain = createFlow<Context, unknown, Events>(
       {
         events: { '[bus] form.submit': { entrypoint: 'form.submit' } },
         config: {
@@ -151,16 +151,16 @@ describe('chain behavior', () => {
       { bus, context: { requestId: 'request-1' } }
     )
 
-    const started = behavior.start()
+    const started = chain.start()
 
     assert.equal(started.validation.ok, false)
     assert.deepEqual(started.active, [])
   })
 
   it('reports only final failed runner results through onRunnerError', async () => {
-    const bus = createPubSubBehavior<Events>()
+    const bus = createPubSub<Events>()
     const errors: Array<{ binding: string; entrypoint: string; code: string }> = []
-    const behavior = createChainBehavior<Context, unknown, Events>(
+    const chain = createFlow<Context, unknown, Events>(
       {
         actions: {
           fail: () => ({ type: 'fail' as const, reason: 'blocked' }),
@@ -178,7 +178,7 @@ describe('chain behavior', () => {
       }
     )
 
-    behavior.start()
+    chain.start()
     bus.emit('form.submit', { email: 'ada@example.com' })
     await flush()
 
@@ -186,9 +186,9 @@ describe('chain behavior', () => {
   })
 
   it('cancels only the active run in the same latest lane', () => {
-    const bus = createPubSubBehavior<Events>()
+    const bus = createPubSub<Events>()
     const calls: Array<{ id: string | undefined; signal: AbortSignal }> = []
-    const behavior = createChainBehavior<Context, unknown, Events>(
+    const chain = createFlow<Context, unknown, Events>(
       {
         actions: {
           save: ({ input, signal }) => {
@@ -210,7 +210,7 @@ describe('chain behavior', () => {
       { bus, context: { requestId: 'request-1' } }
     )
 
-    behavior.start()
+    chain.start()
     bus.emit('form.submit', { email: 'ada@example.com', id: 'first' })
     bus.emit('form.submit', { email: 'grace@example.com', id: 'second' })
     bus.emit('form.submit', { email: 'lin@example.com', id: 'first' })
@@ -223,19 +223,19 @@ describe('chain behavior', () => {
     assert.equal(calls[1]?.signal.aborted, false)
     assert.equal(calls[2]?.signal.aborted, false)
 
-    behavior.stop({ force: true })
+    chain.stop({ force: true })
   })
 
   it('queues runs in order and reports queue overflow', async () => {
-    const bus = createPubSubBehavior<Events>()
+    const bus = createPubSub<Events>()
     const diagnostics: string[] = []
-    const diagnosticBus = bus as BehaviorBus<BehaviorEventMap>
-    diagnosticBus.on('cfb.queue.overflow', () => diagnostics.push('overflow'))
-    diagnosticBus.on('cfb.run.dropped', () => diagnostics.push('dropped'))
+    const diagnosticBus = bus as Bus<EventMap>
+    diagnosticBus.on('slapflow.queue.overflow', () => diagnostics.push('overflow'))
+    diagnosticBus.on('slapflow.run.dropped', () => diagnostics.push('dropped'))
 
     const calls: string[] = []
     const resolvers: Array<() => void> = []
-    const behavior = createChainBehavior<Context, unknown, Events>(
+    const chain = createFlow<Context, unknown, Events>(
       {
         actions: {
           save: ({ input }) => {
@@ -257,7 +257,7 @@ describe('chain behavior', () => {
       { bus, context: { requestId: 'request-1' } }
     )
 
-    behavior.start()
+    chain.start()
     bus.emit('form.submit', { email: 'first@example.com' })
     bus.emit('form.submit', { email: 'second@example.com' })
     bus.emit('form.submit', { email: 'third@example.com' })
@@ -267,13 +267,13 @@ describe('chain behavior', () => {
     assert.deepEqual(calls, ['first@example.com', 'second@example.com'])
     assert.deepEqual(diagnostics, ['overflow', 'dropped'])
 
-    behavior.stop({ force: true })
+    chain.stop({ force: true })
   })
 
   it('drops events while a drop lane is active and force-aborts active runs', () => {
-    const bus = createPubSubBehavior<Events>()
+    const bus = createPubSub<Events>()
     const calls: AbortSignal[] = []
-    const behavior = createChainBehavior<Context, unknown, Events>(
+    const chain = createFlow<Context, unknown, Events>(
       {
         actions: {
           save: ({ signal }) => {
@@ -295,10 +295,10 @@ describe('chain behavior', () => {
       { bus, context: { requestId: 'request-1' } }
     )
 
-    behavior.start()
+    chain.start()
     bus.emit('form.submit', { email: 'ada@example.com' })
     bus.emit('form.submit', { email: 'grace@example.com' })
-    behavior.stop({ force: true })
+    chain.stop({ force: true })
 
     assert.equal(calls.length, 1)
     assert.equal(calls[0]?.aborted, true)

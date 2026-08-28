@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import { describe, expect, it, vi } from 'vitest'
-import { createBehaviorRunner, createMemoryTraceSink, type BehaviorConfig } from '~/index'
+import { createRunner } from '~/runner'
+import { createMemoryTraceSink, type Config } from '~/index'
 import { createRuntime } from '~/helpers/runner/createRuntime'
 import { type RunState } from '~/helpers/runner/runnerTypes'
-import { type BehaviorTraceEntry } from '~/types'
+import { type TraceEntry } from '~/types'
 
 type Ctx = {
   seen?: boolean
@@ -17,7 +18,7 @@ type Ctx = {
 
 describe('validation', () => {
   it('reports invalid config shapes and strategy fields', () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
 
     assert.deepEqual(
       runner.validateConfig(undefined).errors.map((error) => error.code),
@@ -33,7 +34,7 @@ describe('validation', () => {
     assert.equal(result.ok, false)
     assert.deepEqual(new Set(result.errors.map((error) => error.code)), new Set(['FN_MISSING', 'MODE_INVALID']))
 
-    const missingStrategies = runner.validateConfig({} as BehaviorConfig)
+    const missingStrategies = runner.validateConfig({} as Config)
 
     assert.equal(missingStrategies.ok, false)
     assert.deepEqual(
@@ -43,7 +44,7 @@ describe('validation', () => {
   })
 
   it('reports missing then, catch and entrypoint targets', () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     const result = runner.validateConfig({
       entrypoints: { start: 'missing.entrypoint' },
       strategies: {
@@ -56,7 +57,7 @@ describe('validation', () => {
   })
 
   it('reports invalid path refs in props and nested conditions', () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     const result = runner.validateConfig({
       strategies: {
         root: {
@@ -72,7 +73,7 @@ describe('validation', () => {
   })
 
   it('treats cycles without terminal as errors and terminal cycles as warnings', () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     const invalid = runner.validateConfig({
       strategies: {
         root: { fn: 'core.noop', then: ['again'] },
@@ -98,7 +99,7 @@ describe('validation', () => {
   })
 
   it('detects cycles through catch branches', () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     const result = runner.validateConfig({
       strategies: {
         root: { fn: 'core.noop', catch: ['recover'] },
@@ -113,7 +114,7 @@ describe('validation', () => {
   })
 
   it('warns when runner safety limits are disabled', () => {
-    const runner = createBehaviorRunner<Ctx>({ maxStepCount: -1, maxDepth: -1 })
+    const runner = createRunner<Ctx>({ maxStepCount: -1, maxDepth: -1 })
     const result = runner.validateConfig({
       strategies: {
         root: { fn: 'core.noop' },
@@ -131,7 +132,7 @@ describe('validation', () => {
   })
 
   it('rejects direct and transitive nested loops through then and catch', () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     const direct = runner.validateConfig({
       strategies: {
         outer: { fn: 'core.loop', then: [{ strategy: 'inner' }] },
@@ -158,7 +159,7 @@ describe('validation', () => {
   })
 
   it('allows sibling loops in parallel branches', () => {
-    const runner = createBehaviorRunner<Ctx>()
+    const runner = createRunner<Ctx>()
     const result = runner.validateConfig({
       strategies: {
         root: { fn: 'core.parallel', mode: 'parallel', then: ['first', 'second'] },
@@ -247,12 +248,12 @@ describe('runtime helpers', () => {
 
 describe('trace and safety limits', () => {
   it('does not return trace by default and returns memory trace when enabled', async () => {
-    const withoutTrace = createBehaviorRunner<Ctx>()
+    const withoutTrace = createRunner<Ctx>()
     withoutTrace.loadConfig({ strategies: { root: { fn: 'core.noop' } } })
 
     assert.equal((await withoutTrace.run('root', {})).trace, undefined)
 
-    const withTrace = createBehaviorRunner<Ctx>({ trace: true })
+    const withTrace = createRunner<Ctx>({ trace: true })
     withTrace.loadConfig({ strategies: { root: { fn: 'core.set', props: { path: 'seen', value: true } } } })
 
     const result = await withTrace.run('root', {})
@@ -282,8 +283,8 @@ describe('trace and safety limits', () => {
   })
 
   it('pushes trace entries into a custom trace sink', async () => {
-    const entries: BehaviorTraceEntry[] = []
-    const runner = createBehaviorRunner<Ctx>({
+    const entries: TraceEntry[] = []
+    const runner = createRunner<Ctx>({
       trace: {
         push: (entry) => entries.push(entry),
         entries: () => entries,
@@ -319,7 +320,7 @@ describe('trace and safety limits', () => {
   })
 
   it('returns limit errors for maxDepth and timeout', async () => {
-    const depthRunner = createBehaviorRunner<Ctx>({ maxDepth: 0 })
+    const depthRunner = createRunner<Ctx>({ maxDepth: 0 })
     depthRunner.loadConfig({
       strategies: {
         root: { fn: 'core.noop', then: ['next'] },
@@ -329,7 +330,7 @@ describe('trace and safety limits', () => {
 
     assert.equal((await depthRunner.run('root', {})).error?.code, 'MAX_DEPTH')
 
-    const timeoutRunner = createBehaviorRunner<Ctx>({ timeout: 1 })
+    const timeoutRunner = createRunner<Ctx>({ timeout: 1 })
     timeoutRunner.registerAction('slow', async () => {
       await new Promise((resolve) => setTimeout(resolve, 5))
     })
@@ -346,7 +347,7 @@ describe('trace and safety limits', () => {
 
   it('keeps timeoutMs as a deprecated fallback', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const runner = createBehaviorRunner<Ctx>({ timeoutMs: 1 })
+    const runner = createRunner<Ctx>({ timeoutMs: 1 })
     runner.registerAction('slow', async () => {
       await new Promise((resolve) => setTimeout(resolve, 5))
     })
@@ -362,7 +363,7 @@ describe('trace and safety limits', () => {
   })
 
   it('aborts timed-out actions and ignores their late runtime mutations', async () => {
-    const runner = createBehaviorRunner<Ctx, string>({ timeout: 1 })
+    const runner = createRunner<Ctx, string>({ timeout: 1 })
     let aborted = false
     runner.registerAction(
       'slow',
@@ -391,7 +392,7 @@ describe('trace and safety limits', () => {
   })
 
   it('allows step-count and depth checks to be disabled', async () => {
-    const runner = createBehaviorRunner<Ctx>({ maxStepCount: -1, maxDepth: -1 })
+    const runner = createRunner<Ctx>({ maxStepCount: -1, maxDepth: -1 })
     runner.loadConfig({
       strategies: {
         root: { fn: 'core.noop', then: ['next'] },

@@ -1,35 +1,35 @@
 import {
-  type BehaviorAction,
-  type BehaviorConditionFn,
-  type BehaviorConfig,
-  type BehaviorInput,
-  type BehaviorRunResult,
-  type BehaviorRunner,
-  type BehaviorRunOptions,
-  type BehaviorRunnerOptions,
-  type BehaviorValidationResult,
+  type Action,
+  type ConditionFn,
+  type Config,
+  type Input,
+  type RunResult,
+  type Runner,
+  type RunOptions,
+  type RunnerOptions,
+  type ValidationResult,
 } from '~/types'
-import { BehaviorSyncAsyncError } from '~/errors'
+import { SyncAsyncError } from '~/errors'
 import { createActionsRegistry } from '~/registry/actions'
 import { createConditionsRegistry } from '~/registry/conditions'
 import { createMemoryTraceSink } from '~/helpers/trace/createMemoryTraceSink'
 import { executeStrategy } from '~/helpers/runner/executeStrategy'
 import { finishRunResult } from '~/helpers/runner/finishRunResult'
-import { behaviorError } from '~/helpers/errors/behaviorError'
+import { slapError } from '~/helpers/errors/slapError'
 import { isPromiseLike } from '~/helpers/runner/isPromiseLike'
 import { resolveEntrypoint } from '~/helpers/runner/resolveEntrypoint'
 import { runnerLimitWarnings } from '~/helpers/validation/runnerLimitWarnings'
 import { type Normalized, type RunnerEnvironment, type RunState } from '~/helpers/runner/runnerTypes'
-import { validateBehaviorConfig } from '~/helpers/validation/validateBehaviorConfig'
+import { validateConfig as validateRawConfig } from '~/helpers/validation/validateConfig'
 import { cloneRuntimeVariables } from '~/helpers/runner/cloneRuntimeVariables'
 import { createRunCancellation } from '~/helpers/runner/createRunCancellation'
 
-export const createBehaviorRunner = <TContext, TPatch = unknown>(
-  options: BehaviorRunnerOptions<TContext, TPatch> = {}
-): BehaviorRunner<TContext, TPatch> => {
+export const createRunner = <TContext, TPatch = unknown>(
+  options: RunnerOptions<TContext, TPatch> = {}
+): Runner<TContext, TPatch> => {
   const actionsRegistry = createActionsRegistry<TContext, TPatch>()
   const conditionsRegistry = createConditionsRegistry<TContext>()
-  const configRef: { current?: BehaviorConfig } = {}
+  const configRef: { current?: Config } = {}
   const timeout = options.timeout ?? options.timeoutMs
   const runnerOptions = timeout === undefined ? options : { ...options, timeout }
   const mergeData = options.mergeData ?? ((current, next) => ({ ...current, ...next }))
@@ -47,28 +47,28 @@ export const createBehaviorRunner = <TContext, TPatch = unknown>(
     mergeData,
   }
 
-  const registerAction = (name: string, action: BehaviorAction<TContext, TPatch>): void => {
+  const registerAction = (name: string, action: Action<TContext, TPatch>): void => {
     actionsRegistry.set(name, action)
   }
 
-  const registerActions = (items: Record<string, BehaviorAction<TContext, TPatch>>): void => {
+  const registerActions = (items: Record<string, Action<TContext, TPatch>>): void => {
     Object.entries(items).forEach(([name, action]) => registerAction(name, action))
   }
 
-  const registerCondition = (name: string, condition: BehaviorConditionFn<TContext>): void => {
+  const registerCondition = (name: string, condition: ConditionFn<TContext>): void => {
     conditionsRegistry.set(name, condition)
   }
 
-  const registerConditions = (items: Record<string, BehaviorConditionFn<TContext>>): void => {
+  const registerConditions = (items: Record<string, ConditionFn<TContext>>): void => {
     Object.entries(items).forEach(([name, condition]) => registerCondition(name, condition))
   }
 
-  const validateConfig = (target = configRef.current): BehaviorValidationResult => {
-    const result = validateBehaviorConfig(target, actionsRegistry, conditionsRegistry)
+  const validateConfig = (target = configRef.current): ValidationResult => {
+    const result = validateRawConfig(target, actionsRegistry, conditionsRegistry)
     return { ...result, warnings: [...result.warnings, ...runnerLimitWarnings(runnerOptions)] }
   }
 
-  const loadConfig = (nextConfig: BehaviorConfig): BehaviorValidationResult => {
+  const loadConfig = (nextConfig: Config): ValidationResult => {
     configRef.current = nextConfig
     return validateConfig(nextConfig)
   }
@@ -76,10 +76,10 @@ export const createBehaviorRunner = <TContext, TPatch = unknown>(
   const runInternal = (
     entrypoint: string,
     context: TContext,
-    input: BehaviorInput,
+    input: Input,
     sync: boolean,
-    runOptions: BehaviorRunOptions
-  ): BehaviorRunResult<TContext, TPatch> | Promise<BehaviorRunResult<TContext, TPatch>> => {
+    runOptions: RunOptions
+  ): RunResult<TContext, TPatch> | Promise<RunResult<TContext, TPatch>> => {
     const traceSink = options.trace === true ? createMemoryTraceSink() : options.trace || undefined
     const cancellation = createRunCancellation(runOptions.signal)
     const state: RunState<TContext, TPatch> = {
@@ -115,7 +115,7 @@ export const createBehaviorRunner = <TContext, TPatch = unknown>(
         ...(traceSink?.entries ? { trace: traceSink.entries() } : {}),
       })
     }
-    const finish = (result: Normalized<TContext, TPatch>): BehaviorRunResult<TContext, TPatch> => {
+    const finish = (result: Normalized<TContext, TPatch>): RunResult<TContext, TPatch> => {
       state.closed = true
       cancellation.dispose()
 
@@ -141,20 +141,20 @@ export const createBehaviorRunner = <TContext, TPatch = unknown>(
   const run = async (
     entrypoint: string,
     context: TContext,
-    input: BehaviorInput = {},
-    runOptions: BehaviorRunOptions = {}
-  ): Promise<BehaviorRunResult<TContext, TPatch>> =>
-    runInternal(entrypoint, context, input, false, runOptions) as Promise<BehaviorRunResult<TContext, TPatch>>
+    input: Input = {},
+    runOptions: RunOptions = {}
+  ): Promise<RunResult<TContext, TPatch>> =>
+    runInternal(entrypoint, context, input, false, runOptions) as Promise<RunResult<TContext, TPatch>>
 
   const runSync = (
     entrypoint: string,
     context: TContext,
-    input: BehaviorInput = {},
-    runOptions: BehaviorRunOptions = {}
-  ): BehaviorRunResult<TContext, TPatch> => {
+    input: Input = {},
+    runOptions: RunOptions = {}
+  ): RunResult<TContext, TPatch> => {
     const result = runInternal(entrypoint, context, input, true, runOptions)
     if (isPromiseLike(result)) {
-      throw new BehaviorSyncAsyncError(behaviorError('ASYNC_IN_SYNC_RUN', 'runSync encountered an async action'))
+      throw new SyncAsyncError(slapError('ASYNC_IN_SYNC_RUN', 'runSync encountered an async action'))
     }
     return result
   }

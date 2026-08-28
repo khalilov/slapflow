@@ -1,4 +1,4 @@
-import { type BehaviorMode, type BehaviorProps, type BehaviorStrategy } from '~/types'
+import { type Mode, type Props, type Strategy } from '~/types'
 import { cloneData } from '~/helpers/trace/cloneData'
 import { type RunState } from '~/helpers/runner/runnerTypes'
 
@@ -7,9 +7,9 @@ export const pushTrace = <TContext, TPatch>(
   step: number,
   depth: number,
   strategyId: string,
-  strategy: BehaviorStrategy,
+  strategy: Strategy,
   status: 'matched' | 'skipped' | 'success' | 'stopped' | 'failed',
-  props: BehaviorProps,
+  props: Props,
   dataBefore: Record<string, unknown>,
   startedAt: number,
   reason?: string
@@ -19,7 +19,7 @@ export const pushTrace = <TContext, TPatch>(
     depth,
     strategy: strategyId,
     fn: strategy.fn,
-    mode: strategy.mode as BehaviorMode | undefined,
+    mode: strategy.mode as Mode | undefined,
     status,
     input: state.input,
     props,

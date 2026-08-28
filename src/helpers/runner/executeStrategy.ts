@@ -1,7 +1,7 @@
-import { type BehaviorActionResult, type BehaviorProps } from '~/types'
-import { BehaviorSyncAsyncError } from '~/errors'
+import { type ActionResult, type Props } from '~/types'
+import { SyncAsyncError } from '~/errors'
 import { afterAction } from '~/helpers/runner/afterAction'
-import { behaviorError } from '~/helpers/errors/behaviorError'
+import { slapError } from '~/helpers/errors/slapError'
 import { cloneData } from '~/helpers/trace/cloneData'
 import { createRuntime } from '~/helpers/runner/createRuntime'
 import { defaultMaxDepth, defaultMaxStepCount } from '~/helpers/runner/runnerDefaults'
@@ -24,7 +24,7 @@ import { type Normalized, type RunState, type RunnerEnvironment } from '~/helper
 
 export const executeStrategy = <TContext, TPatch>(
   id: string,
-  extraProps: BehaviorProps,
+  extraProps: Props,
   depth: number,
   state: RunState<TContext, TPatch>,
   environment: RunnerEnvironment<TContext, TPatch>
@@ -33,7 +33,7 @@ export const executeStrategy = <TContext, TPatch>(
   if (!config) {
     return {
       status: 'failed',
-      error: behaviorError('CONFIG_INVALID', 'No behavior config loaded', { stage: { phase: 'entrypoint' } }),
+      error: slapError('CONFIG_INVALID', 'No config loaded', { stage: { phase: 'entrypoint' } }),
       patches: [],
       events: [],
     }
@@ -54,7 +54,7 @@ export const executeStrategy = <TContext, TPatch>(
   if (!strategy) {
     return {
       status: 'failed',
-      error: behaviorError('STRATEGY_NOT_FOUND', `Strategy "${id}" is not defined`, {
+      error: slapError('STRATEGY_NOT_FOUND', `Strategy "${id}" is not defined`, {
         strategy: id,
         stage: { phase: 'entrypoint', strategy: id, depth },
       }),
@@ -66,7 +66,7 @@ export const executeStrategy = <TContext, TPatch>(
   if (!action) {
     return {
       status: 'failed',
-      error: behaviorError('ACTION_NOT_FOUND', `Action "${strategy.fn}" is not registered`, {
+      error: slapError('ACTION_NOT_FOUND', `Action "${strategy.fn}" is not registered`, {
         strategy: id,
         fn: strategy.fn,
         stage: {
@@ -84,19 +84,19 @@ export const executeStrategy = <TContext, TPatch>(
   }
 
   const rawProps = { ...(strategy.props ?? {}), ...extraProps }
-  let props: BehaviorProps
+  let props: Props
   try {
     props = resolveValue(rawProps, {
       ...state,
       strategy: id,
       configPath: `strategies.${id}.props`,
-    }) as BehaviorProps
+    }) as Props
   } catch (cause) {
     if (!(cause instanceof ResolutionError)) {
       throw cause
     }
     return handleFailure(
-      withErrorStage(cause.behaviorError, {
+      withErrorStage(cause.slapError, {
         phase: 'action',
         strategy: id,
         fn: strategy.fn,
@@ -110,7 +110,7 @@ export const executeStrategy = <TContext, TPatch>(
       environment
     )
   }
-  const traceProps = redactVariableProps(rawProps, props) as BehaviorProps
+  const traceProps = redactVariableProps(rawProps, props) as Props
   const runtime = createRuntime(state, {
     executeThen: async () => toRuntimeResult(await executeThen(strategy, depth, state, environment)),
     executeCatch: strategy.catch?.length
@@ -148,7 +148,7 @@ export const executeStrategy = <TContext, TPatch>(
   }
 
   state.stepCounter.current += 1
-  const invoke = (): BehaviorActionResult<TContext, TPatch> | Promise<BehaviorActionResult<TContext, TPatch>> =>
+  const invoke = (): ActionResult<TContext, TPatch> | Promise<ActionResult<TContext, TPatch>> =>
     action({ context: state.context, props, input: state.input, signal: state.signal, runtime })
 
   const actionThrown = (cause: unknown): Normalized<TContext, TPatch> | Promise<Normalized<TContext, TPatch>> => {
@@ -158,7 +158,7 @@ export const executeStrategy = <TContext, TPatch>(
 
     return handleFailure(
       cause instanceof ResolutionError
-        ? withErrorStage(cause.behaviorError, {
+        ? withErrorStage(cause.slapError, {
             phase: 'action',
             strategy: id,
             fn: strategy.fn,
@@ -166,7 +166,7 @@ export const executeStrategy = <TContext, TPatch>(
             depth,
             step: traceStep,
           })
-        : behaviorError('ACTION_THROWN', `Action "${strategy.fn}" threw`, {
+        : slapError('ACTION_THROWN', `Action "${strategy.fn}" threw`, {
             strategy: id,
             fn: strategy.fn,
             cause,
@@ -183,8 +183,8 @@ export const executeStrategy = <TContext, TPatch>(
     const raw = invoke()
     if (isPromiseLike(raw)) {
       if (state.sync) {
-        throw new BehaviorSyncAsyncError(
-          behaviorError('ASYNC_IN_SYNC_RUN', `Strategy "${id}" returned a Promise`, {
+        throw new SyncAsyncError(
+          slapError('ASYNC_IN_SYNC_RUN', `Strategy "${id}" returned a Promise`, {
             strategy: id,
             fn: strategy.fn,
             stage: { phase: 'action', strategy: id, fn: strategy.fn, mode: strategy.mode, depth, step: traceStep },
@@ -238,7 +238,7 @@ export const executeStrategy = <TContext, TPatch>(
 
     return afterAction(raw, id, strategy, depth, state, traceProps, dataBefore, traceStep, startedAt, environment)
   } catch (cause) {
-    if (cause instanceof BehaviorSyncAsyncError) {
+    if (cause instanceof SyncAsyncError) {
       throw cause
     }
     return actionThrown(cause)

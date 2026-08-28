@@ -1,11 +1,11 @@
-import { type BehaviorActionResult } from '~/types'
-import { behaviorError } from '~/helpers/errors/behaviorError'
+import { type ActionResult } from '~/types'
+import { slapError } from '~/helpers/errors/slapError'
 import { type Normalized } from '~/helpers/runner/runnerTypes'
 import { skippedResult } from '~/helpers/runner/skippedResult'
 import { successResult } from '~/helpers/runner/successResult'
 
 export const normalizeActionResult = <TContext, TPatch>(
-  raw: BehaviorActionResult<TContext, TPatch>
+  raw: ActionResult<TContext, TPatch>
 ): Normalized<TContext, TPatch> => {
   if (raw === false) {
     return skippedResult()
@@ -30,8 +30,8 @@ export const normalizeActionResult = <TContext, TPatch>(
     return {
       status: 'failed',
       error:
-        (suppliedError as ReturnType<typeof behaviorError> | undefined) ??
-        behaviorError('ACTION_THROWN', raw.reason ?? 'Action failed', { cause: raw.error }),
+        (suppliedError as ReturnType<typeof slapError> | undefined) ??
+        slapError('ACTION_THROWN', raw.reason ?? 'Action failed', { cause: raw.error }),
       patches: [],
       events: [],
       ...(raw.data ? { data: raw.data } : {}),
