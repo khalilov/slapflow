@@ -101,6 +101,8 @@ export type EventMap = Record<string, unknown>
 
 export type EventName<TEvents extends object> = Extract<keyof TEvents, string>
 
+export type EventPattern = `${string}*${string}`
+
 export type BusEvent<TPayload = unknown> = {
   id: string
   topic: string
@@ -137,11 +139,14 @@ export type BusOptions<TEvents extends object> = {
 }
 
 export type Bus<TEvents extends object = EventMap> = {
-  on<TEvent extends EventName<TEvents>>(
-    event: TEvent,
-    handler: EventHandler<TEvents, TEvent>
-  ): () => void
-  off<TEvent extends EventName<TEvents>>(event: TEvent, handler?: EventHandler<TEvents, TEvent>): void
+  on: {
+    <TEvent extends EventName<TEvents>>(event: TEvent, handler: EventHandler<TEvents, TEvent>): () => void
+    (event: EventPattern, handler: (event: BusEvent<unknown>) => void): () => void
+  }
+  off: {
+    <TEvent extends EventName<TEvents>>(event: TEvent, handler?: EventHandler<TEvents, TEvent>): void
+    (event: EventPattern, handler?: (event: BusEvent<unknown>) => void): void
+  }
   emit<TEvent extends EventName<TEvents>>(
     topic: TEvent,
     payload: TEvents[TEvent],
@@ -171,8 +176,8 @@ export type WSRetryOptions = RetryOptions
 export type WSOptions<TEvents extends object = EventMap> = {
   bus: Bus<TEvents>
   createSocket: () => WSSocket
-  inboundTopics?: EventName<TEvents>[]
-  outboundTopics?: EventName<TEvents>[]
+  inboundTopics?: (EventName<TEvents> | EventPattern)[]
+  outboundTopics?: (EventName<TEvents> | EventPattern)[]
   origin?: string
   retry?: WSRetryOptions
 }

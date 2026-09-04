@@ -127,4 +127,34 @@ describe('websocket bridge', () => {
 
     assert.equal(ws.status(), 'stopped')
   })
+
+  it('accepts inbound envelopes matching a wildcard topic', () => {
+    const bus = createPubSub<Events>()
+    const socket = new FakeSocket()
+    const received: string[] = []
+    bus.on('order.*', ({ parsed }) => received.push((parsed as { orderId: string }).orderId))
+    const ws = createWS({
+      bus,
+      createSocket: () => socket,
+      inboundTopics: ['order.*'],
+      origin: 'ui',
+      retry: { jitter: false },
+    })
+
+    ws.start()
+    socket.open()
+    socket.message(
+      JSON.stringify({
+        id: 'remote-1',
+        topic: 'order.updated',
+        occurredAt: 1,
+        origin: 'api',
+        parsed: { orderId: 'updated-1' },
+        serialized: '{"orderId":"updated-1"}',
+      })
+    )
+
+    assert.deepEqual(received, ['updated-1'])
+    ws.stop()
+  })
 })

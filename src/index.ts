@@ -43,6 +43,7 @@ export {
   type EventHandler,
   type EventMap,
   type EventName,
+  type EventPattern,
   type ExpressionOperator,
   type FetchResponseType,
   type InactiveBinding,

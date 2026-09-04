@@ -338,17 +338,22 @@ unsubscribe()
 
 ```ts
 type Bus<TEvents extends object = Record<string, unknown>> = {
-  on<TEvent extends keyof TEvents>(
-    event: TEvent,
-    handler: (event: BusEvent<TEvents[TEvent]>) => void
-  ): () => void
-  off<TEvent extends keyof TEvents>(event: TEvent, handler?: (event: BusEvent<TEvents[TEvent]>) => void): void
+  on: {
+    <TEvent extends keyof TEvents>(event: TEvent, handler: (event: BusEvent<TEvents[TEvent]>) => void): () => void
+    (event: EventPattern, handler: (event: BusEvent<unknown>) => void): () => void
+  }
+  off: {
+    <TEvent extends keyof TEvents>(event: TEvent, handler?: (event: BusEvent<TEvents[TEvent]>) => void): void
+    (event: EventPattern, handler?: (event: BusEvent<unknown>) => void): void
+  }
   emit<TEvent extends keyof TEvents>(
     topic: TEvent,
     payload: TEvents[TEvent],
     options?: { origin?: string }
   ): BusEvent<TEvents[TEvent]>
 }
+
+type EventPattern = `${string}*${string}`
 
 type BusEvent<TPayload> = {
   id: string
@@ -361,6 +366,18 @@ type BusEvent<TPayload> = {
 ```
 
 `emit` creates an envelope and serializes the payload once before subscribers run. Event identifiers are opaque 12-character alphanumeric runtime IDs for correlation and echo suppression. They are not cryptographically secure and must not be used for access tokens, signatures, public links, or any security-sensitive purpose. `on` returns an unsubscribe function. `off(event, handler)` removes one handler, while `off(event)` clears the channel. An error in one subscriber does not block the others; `createPubSub({ onError })` receives the error and original event. On serialization failure, the bus delivers `{ error }` as `parsed` and the error body as `serialized`, then calls `onError` with the original cause.
+
+### Wildcard subscriptions
+
+A topic may be subscribed by pattern, using `*` to match exactly one dot-delimited segment. A wildcard does not cross a `.` boundary.
+
+```ts
+bus.on('hub.user.*', ({ parsed }) => {})       // hub.user.created, hub.user.deleted
+bus.on('hub.*.created', ({ parsed }) => {})    // hub.user.created, hub.team.created
+bus.on('hub.*.export', ({ parsed }) => {})     // NOT hub.user.audit.export (wildcard spans one segment)
+```
+
+Exact-name subscriptions stay O(1); wildcard patterns are matched separately, so registrations without `*` pay no matching cost. A wildcard handler receives `parsed` as `unknown` — narrow it before use. Wildcards work in `bus.on`/`bus.off` and in `inboundTopics`/`outboundTopics` of `createWS`.
 
 ## Flow
 
@@ -462,7 +479,7 @@ const ws = createWS({
 ws.start()
 ```
 
-Inbound topics pass an explicit allowlist. The bridge parses a JSON envelope and calls `bus.dispatch(event)`, preserving `id`, `occurredAt`, `origin`, `parsed`, and `serialized`; it remembers accepted inbound IDs and does not send them back outbound. Outbound topics send the complete event envelope as JSON, so the remote bridge can dispatch it without recreating its identity. `maxAttempts` limits reconnects; omitting it retries indefinitely. `start`, `stop`, `reconnect`, and `status` manage the transport lifecycle. Diagnostics: `slapflow.ws.connecting`, `slapflow.ws.connected`, `slapflow.ws.disconnected`, `slapflow.ws.retrying`, and `slapflow.ws.message.rejected`.
+Inbound topics pass an explicit allowlist. Each entry may be an exact topic or a wildcard pattern, where `*` matches one dot-delimited segment. The bridge parses a JSON envelope and calls `bus.dispatch(event)`, preserving `id`, `occurredAt`, `origin`, `parsed`, and `serialized`; it remembers accepted inbound IDs and does not send them back outbound. Outbound topics send the complete event envelope as JSON, so the remote bridge can dispatch it without recreating its identity. `maxAttempts` limits reconnects; omitting it retries indefinitely. `start`, `stop`, `reconnect`, and `status` manage the transport lifecycle. Diagnostics: `slapflow.ws.connecting`, `slapflow.ws.connected`, `slapflow.ws.disconnected`, `slapflow.ws.retrying`, and `slapflow.ws.message.rejected`.
 
 ## Safety Limits
 

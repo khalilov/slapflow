@@ -4,18 +4,27 @@ import {
   type BusEvent,
   type BusEmitOptions,
   type BusOptions,
-  type EventHandler,
   type EventMap,
   type EventName,
 } from '~/types'
 import { createId } from '~/helpers/ids/createId'
 import { isBusEvent } from '~/helpers/pubSub/isBusEvent'
+import { matchesTopic } from '~/helpers/pubSub/matchesTopic'
 import { serializeError } from '~/helpers/pubSub/serializeError'
 
 export const createPubSub = <TEvents extends object = EventMap>(
   options: BusOptions<TEvents> = {}
 ): Bus<TEvents> => {
   const subscribers = new Map<string, Set<(event: BusEvent<unknown>) => void>>()
+  const wildcardSubscribers = new Map<string, Set<(event: BusEvent<unknown>) => void>>()
+
+  const runHandler = (event: BusEvent, handler: (event: BusEvent<unknown>) => void): void => {
+    try {
+      handler(event as BusEvent<unknown>)
+    } catch (error) {
+      options.onError?.({ type: 'subscriber', event, error } as BusErrorEvent<TEvents>)
+    }
+  }
 
   const dispatch = (event: unknown): BusEvent | undefined => {
     let dispatchedEvent: BusEvent | undefined
@@ -32,10 +41,14 @@ export const createPubSub = <TEvents extends object = EventMap>(
 
       if (handlers) {
         for (const handler of [...handlers]) {
-          try {
-            handler(event as BusEvent<unknown>)
-          } catch (error) {
-            options.onError?.({ type: 'subscriber', event, error } as BusErrorEvent<TEvents>)
+          runHandler(event, handler)
+        }
+      }
+
+      for (const [pattern, wildcardHandlers] of wildcardSubscribers) {
+        if (matchesTopic(event.topic, pattern)) {
+          for (const handler of [...wildcardHandlers]) {
+            runHandler(event, handler)
           }
         }
       }
@@ -45,34 +58,30 @@ export const createPubSub = <TEvents extends object = EventMap>(
     return dispatchedEvent
   }
 
-  const on = <TEvent extends EventName<TEvents>>(
-    event: TEvent,
-    handler: EventHandler<TEvents, TEvent>
-  ) => {
-    const handlers = subscribers.get(event) ?? new Set<(event: BusEvent<unknown>) => void>()
-    const listener = handler as (event: BusEvent<unknown>) => void
+  const on = (event: string, handler: (event: BusEvent<unknown>) => void) => {
+    const registry = event.includes('*') ? wildcardSubscribers : subscribers
+    const handlers = registry.get(event) ?? new Set<(event: BusEvent<unknown>) => void>()
 
-    handlers.add(listener)
-    subscribers.set(event, handlers)
+    handlers.add(handler)
+    registry.set(event, handlers)
 
     return () => off(event, handler)
   }
 
-  const off = <TEvent extends EventName<TEvents>>(
-    event: TEvent,
-    handler?: EventHandler<TEvents, TEvent>
-  ) => {
+  const off = (event: string, handler?: (event: BusEvent<unknown>) => void) => {
+    const registry = event.includes('*') ? wildcardSubscribers : subscribers
+
     if (handler) {
-      const handlers = subscribers.get(event)
+      const handlers = registry.get(event)
 
       if (handlers) {
-        handlers.delete(handler as (event: BusEvent<unknown>) => void)
+        handlers.delete(handler)
         if (handlers.size === 0) {
-          subscribers.delete(event)
+          registry.delete(event)
         }
       }
     } else {
-      subscribers.delete(event)
+      registry.delete(event)
     }
   }
 

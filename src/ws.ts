@@ -8,6 +8,7 @@ import {
   type WSStatus,
 } from '~/types'
 import { getRetryDelay } from '~/helpers/retry/getRetryDelay'
+import { matchesTopic } from '~/helpers/pubSub/matchesTopic'
 
 const openState = 1
 const maxSeenEvents = 1_000
@@ -26,6 +27,16 @@ export const createWS = <TEvents extends object = EventMap>(
   let started = false
   let currentStatus: WSStatus = 'idle'
   const diagnosticsBus = options.bus as unknown as Bus<EventMap>
+
+  const isInboundTopic = (topic: string): boolean => {
+    for (const pattern of inboundTopics) {
+      if (matchesTopic(topic, pattern)) {
+        return true
+      }
+    }
+
+    return false
+  }
 
   const emitDiagnostic = (topic: string, payload: Record<string, unknown>): void => {
     diagnosticsBus.emit(topic, payload, {
@@ -115,7 +126,7 @@ export const createWS = <TEvents extends object = EventMap>(
           if (typeof data === 'string') {
             try {
               const busEvent = JSON.parse(data) as { topic?: string; id?: string }
-              if (busEvent.topic && inboundTopics.has(busEvent.topic)) {
+              if (busEvent.topic && isInboundTopic(busEvent.topic)) {
                 if (busEvent.id) {
                   rememberEvent(busEvent.id)
                 }

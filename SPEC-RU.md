@@ -338,17 +338,22 @@ unsubscribe()
 
 ```ts
 type Bus<TEvents extends object = Record<string, unknown>> = {
-  on<TEvent extends keyof TEvents>(
-    event: TEvent,
-    handler: (event: BusEvent<TEvents[TEvent]>) => void
-  ): () => void
-  off<TEvent extends keyof TEvents>(event: TEvent, handler?: (event: BusEvent<TEvents[TEvent]>) => void): void
+  on: {
+    <TEvent extends keyof TEvents>(event: TEvent, handler: (event: BusEvent<TEvents[TEvent]>) => void): () => void
+    (event: EventPattern, handler: (event: BusEvent<unknown>) => void): () => void
+  }
+  off: {
+    <TEvent extends keyof TEvents>(event: TEvent, handler?: (event: BusEvent<TEvents[TEvent]>) => void): void
+    (event: EventPattern, handler?: (event: BusEvent<unknown>) => void): void
+  }
   emit<TEvent extends keyof TEvents>(
     topic: TEvent,
     payload: TEvents[TEvent],
     options?: { origin?: string }
   ): BusEvent<TEvents[TEvent]>
 }
+
+type EventPattern = `${string}*${string}`
 
 type BusEvent<TPayload> = {
   id: string
@@ -361,6 +366,18 @@ type BusEvent<TPayload> = {
 ```
 
 `emit` создаёт конверт и сериализует полезную нагрузку один раз до запуска подписчиков. Идентификаторы событий — непрозрачные 12-символьные буквенно-цифровые runtime-ID для корреляции и подавления эха. Они не криптографически стойкие: не используйте их для access token, подписей, публичных ссылок или иных security-sensitive задач. `on` возвращает функцию отписки. `off(event, handler)` удаляет один обработчик, а `off(event)` очищает канал. Ошибка одного подписчика не блокирует остальных; `createPubSub({ onError })` получает ошибку и исходное событие. При ошибке сериализации шина передаёт `{ error }` в качестве `parsed` и тело ошибки в качестве `serialized`, после чего вызывает `onError` с исходной причиной.
+
+### Подписка по шаблону
+
+На тему можно подписаться по шаблону, где `*` соответствует ровно одному сегменту, разделённому точкой. Шаблонный символ не пересекает границу `.`.
+
+```ts
+bus.on('hub.user.*', ({ parsed }) => {})       // hub.user.created, hub.user.deleted
+bus.on('hub.*.created', ({ parsed }) => {})    // hub.user.created, hub.team.created
+bus.on('hub.*.export', ({ parsed }) => {})     // НЕ hub.user.audit.export (один сегмент)
+```
+
+Подписки с точным именем остаются O(1); шаблоны обрабатываются отдельно, поэтому регистрации без `*` не несут накладных затрат на сравнение. Обработчик шаблона получает `parsed` как `unknown` — сужайте тип перед использованием. Шаблоны работают в `bus.on`/`bus.off`, а также в `inboundTopics`/`outboundTopics` у `createWS`.
 
 ## Поток
 
@@ -462,7 +479,7 @@ const ws = createWS({
 ws.start()
 ```
 
-Входящие темы проходят через явный список разрешений. Мост разбирает JSON-конверт и вызывает `bus.dispatch(event)`, сохраняя `id`, `occurredAt`, `origin`, `parsed` и `serialized`; принятые входящие идентификаторы запоминаются и не отправляются обратно наружу. Исходящие темы отправляют полный JSON-конверт события, поэтому удалённый мост может передать его в шину, не создавая новый идентификатор. `maxAttempts` ограничивает reconnect; без него повторы идут бесконечно. `start`, `stop`, `reconnect` и `status` управляют жизненным циклом транспорта. Диагностические события: `slapflow.ws.connecting`, `slapflow.ws.connected`, `slapflow.ws.disconnected`, `slapflow.ws.retrying` и `slapflow.ws.message.rejected`.
+Входящие темы проходят через явный список разрешений. Каждая запись может быть точной темой или шаблоном, где `*` соответствует одному сегменту, разделённому точкой. Мост разбирает JSON-конверт и вызывает `bus.dispatch(event)`, сохраняя `id`, `occurredAt`, `origin`, `parsed` и `serialized`; принятые входящие идентификаторы запоминаются и не отправляются обратно наружу. Исходящие темы отправляют полный JSON-конверт события, поэтому удалённый мост может передать его в шину, не создавая новый идентификатор. `maxAttempts` ограничивает reconnect; без него повторы идут бесконечно. `start`, `stop`, `reconnect` и `status` управляют жизненным циклом транспорта. Диагностические события: `slapflow.ws.connecting`, `slapflow.ws.connected`, `slapflow.ws.disconnected`, `slapflow.ws.retrying` и `slapflow.ws.message.rejected`.
 
 ## Ограничения безопасности
 

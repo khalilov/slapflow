@@ -130,4 +130,58 @@ describe('pub/sub', () => {
     assert.equal(dispatched, event)
     assert.deepEqual(received, [event])
   })
+
+  it('matches wildcard subscriptions segment by segment', () => {
+    type HubEvents = {
+      'hub.user.created': { id: string }
+      'hub.user.deleted': { id: string }
+      'hub.team.created': { id: string }
+      'hub.user.audit.export': { id: string }
+    }
+    const bus = createPubSub<HubEvents>()
+    const received: string[] = []
+
+    bus.on('hub.user.*', ({ parsed }) => received.push(`user:${(parsed as { id: string }).id}`))
+    bus.on('hub.*.created', ({ parsed }) => received.push(`created:${(parsed as { id: string }).id}`))
+
+    bus.emit('hub.user.created', { id: 'a' })
+    bus.emit('hub.user.deleted', { id: 'b' })
+    bus.emit('hub.team.created', { id: 'c' })
+    bus.emit('hub.user.audit.export', { id: 'd' })
+
+    assert.deepEqual(received, [
+      'user:a',
+      'created:a',
+      'user:b',
+      'created:c',
+    ])
+  })
+
+  it('does not let a wildcard segment cross a dot boundary', () => {
+    type HubEvents = {
+      'hub.user.created': { id: string }
+      'hub.user.audit.export': { id: string }
+    }
+    const bus = createPubSub<HubEvents>()
+    const received: string[] = []
+
+    bus.on('hub.*.export', ({ parsed }) => received.push((parsed as { id: string }).id))
+    bus.emit('hub.user.audit.export', { id: 'a' })
+    bus.emit('hub.user.created', { id: 'b' })
+
+    assert.deepEqual(received, [])
+  })
+
+  it('unsubscribes a wildcard subscription', () => {
+    type HubEvents = { 'hub.user.created': { id: string } }
+    const bus = createPubSub<HubEvents>()
+    const received: string[] = []
+    const unsubscribe = bus.on('hub.user.*', ({ parsed }) => received.push((parsed as { id: string }).id))
+
+    bus.emit('hub.user.created', { id: 'a' })
+    unsubscribe()
+    bus.emit('hub.user.created', { id: 'b' })
+
+    assert.deepEqual(received, ['a'])
+  })
 })
