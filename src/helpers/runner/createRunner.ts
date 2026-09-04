@@ -21,6 +21,7 @@ import { resolveEntrypoint } from '~/helpers/runner/resolveEntrypoint'
 import { runnerLimitWarnings } from '~/helpers/validation/runnerLimitWarnings'
 import { type Normalized, type RunnerEnvironment, type RunState } from '~/helpers/runner/runnerTypes'
 import { validateConfig as validateRawConfig } from '~/helpers/validation/validateConfig'
+import { resolveGuards } from '~/helpers/validation/resolveGuards'
 import { cloneRuntimeVariables } from '~/helpers/runner/cloneRuntimeVariables'
 import { createRunCancellation } from '~/helpers/runner/createRunCancellation'
 
@@ -69,7 +70,7 @@ export const createRunner = <TContext, TPatch = unknown>(
   }
 
   const loadConfig = (nextConfig: Config): ValidationResult => {
-    configRef.current = nextConfig
+    configRef.current = resolveGuards(nextConfig).config
     return validateConfig(nextConfig)
   }
 

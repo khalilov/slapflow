@@ -18,6 +18,12 @@ export const validateCondition = (
     return
   }
   const [operator, ...args] = expression
+  if (operator === 'guard') {
+    if (args.length !== 1 || typeof args[0] !== 'string') {
+      errors.push({ code: 'CONDITION_INVALID', message: 'Guard reference must be a single string name', strategy, path })
+    }
+    return
+  }
   if (operator === 'and' || operator === 'or') {
     args.forEach((arg, index) => validateCondition(arg, strategy, `${path}.${index + 1}`, conditionsRegistry, errors))
     return

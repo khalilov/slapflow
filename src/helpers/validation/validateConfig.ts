@@ -4,6 +4,7 @@ import { detectNestedLoops } from '~/helpers/validation/detectNestedLoops'
 import { validateCondition } from '~/helpers/validation/validateCondition'
 import { validateNextList } from '~/helpers/validation/validateNextList'
 import { validateRefs } from '~/helpers/validation/validateRefs'
+import { resolveGuards } from '~/helpers/validation/resolveGuards'
 import { validModes } from '~/helpers/validation/validationConstants'
 import { type RegistryReader } from '~/helpers/validation/registryReader'
 
@@ -28,6 +29,24 @@ export const validateConfig = (
       errors: [{ code: 'CONFIG_INVALID', message: 'Config must include a strategies object', path: 'strategies' }],
       warnings,
     }
+  }
+
+  if (config.guards !== undefined) {
+    if (typeof config.guards !== 'object' || Array.isArray(config.guards)) {
+      errors.push({ code: 'GUARD_INVALID', message: 'Config guards must be an object', path: 'guards' })
+    } else {
+      for (const [name, expression] of Object.entries(config.guards)) {
+        validateCondition(expression, name, `guards.${name}`, conditionsRegistry, errors)
+      }
+    }
+  }
+
+  for (const issue of resolveGuards(config).issues) {
+    errors.push({
+      code: issue.code,
+      message: issue.message,
+      ...(issue.path ? { path: issue.path } : {}),
+    })
   }
 
   for (const [id, strategy] of Object.entries(config.strategies ?? {})) {

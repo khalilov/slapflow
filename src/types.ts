@@ -5,6 +5,7 @@ export type Config = {
   version?: 1
   strategies: Record<string, Strategy>
   entrypoints?: Record<string, string>
+  guards?: Record<string, ConditionExpression>
 }
 
 export type Strategy = {
@@ -30,7 +31,10 @@ export type Next =
       when?: ConditionExpression
     }
 
-export type ConditionExpression = boolean | [operator: string, ...args: unknown[]]
+export type ConditionExpression =
+  | boolean
+  | [operator: string, ...args: unknown[]]
+  | ['guard', name: string]
 
 export type Action<TContext, TPatch = unknown> = (
   args: ActionArgs<TContext>

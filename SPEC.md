@@ -45,7 +45,13 @@ type Config = {
   version?: 1
   strategies: Record<string, Strategy>
   entrypoints?: Record<string, string>
+  guards?: Record<string, ConditionExpression>
 }
+
+type ConditionExpression =
+  | boolean
+  | [operator: string, ...args: unknown[]]
+  | ['guard', name: string]
 
 type Strategy = {
   fn: string
@@ -261,6 +267,29 @@ type Runtime = {
 
 Runtime path get/set is implemented directly through `objwalk`.
 
+## Guards
+
+Reusable `when` expressions live in the `guards` map on `Config` and are referenced from a strategy's `when` (or a `then`/`catch` step's `when`) with the `['guard', name]` node:
+
+```ts
+const config = {
+  guards: {
+    'has-colony': ['truthy', '$data.colonyId'],
+    'same-colony': ['eq', '$input.colonyId', '$context.colonyId'],
+  },
+  strategies: {
+    'colony.join': {
+      fn: 'colony.join',
+      when: ['and', ['guard', 'has-colony'], ['not', ['guard', 'same-colony']]],
+    },
+  },
+}
+```
+
+A guard is a plain `ConditionExpression` and may itself reference other guards. References are expanded once when the config is loaded (`loadConfig`), before the runtime evaluates anything, so the runtime never sees a `['guard', ...]` node. Guards are resolved recursively through `and`/`or`/`not`; a reference to an undefined guard is a `GUARD_NOT_FOUND` validation error, and mutually referencing guards produce `GUARD_CYCLE`. A guard value must be a condition expression, not a `$path` string.
+
+Guards exist so a truth criterion can live in one place instead of being duplicated across strategies; they are evaluated data, not registered code (unlike `registerCondition`, which registers an operator function).
+
 ## Validation
 
 `validateConfig` validates:
@@ -270,7 +299,8 @@ Runtime path get/set is implemented directly through `objwalk`.
 - missing strategies in `then`, `catch`, and `entrypoints`;
 - invalid modes;
 - invalid path references;
-- cycles without a terminal step.
+- cycles without a terminal step;
+- guard references (`GUARD_NOT_FOUND`, `GUARD_CYCLE`, `GUARD_INVALID`).
 
 ## Trace
 

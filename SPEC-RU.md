@@ -45,7 +45,13 @@ type Config = {
   version?: 1
   strategies: Record<string, Strategy>
   entrypoints?: Record<string, string>
+  guards?: Record<string, ConditionExpression>
 }
+
+type ConditionExpression =
+  | boolean
+  | [operator: string, ...args: unknown[]]
+  | ['guard', name: string]
 
 type Strategy = {
   fn: string
@@ -261,6 +267,29 @@ type Runtime = {
 
 Чтение и запись путей во время выполнения реализованы непосредственно через `objwalk`.
 
+## Guards
+
+Переиспользуемые выражения `when` живут в карте `guards` на `Config` и подключаются к `when` стратегии (или шага `then`/`catch`) узлом `['guard', имя]`:
+
+```ts
+const config = {
+  guards: {
+    'has-colony': ['truthy', '$data.colonyId'],
+    'same-colony': ['eq', '$input.colonyId', '$context.colonyId'],
+  },
+  strategies: {
+    'colony.join': {
+      fn: 'colony.join',
+      when: ['and', ['guard', 'has-colony'], ['not', ['guard', 'same-colony']]],
+    },
+  },
+}
+```
+
+Guard — это обычное `ConditionExpression`, и сам может ссылаться на другие guards. Ссылки раскрываются один раз при загрузке конфигурации (`loadConfig`), до того как рантайм что-либо вычисляет, поэтому рантайм никогда не видит узел `['guard', ...]`. Guards раскрываются рекурсивно через `and`/`or`/`not`; ссылка на несуществующий guard даёт ошибку валидации `GUARD_NOT_FOUND`, а взаимные ссылки — `GUARD_CYCLE`. Значение guard должно быть выражением-условием, а не строкой `$path`.
+
+Guards существуют, чтобы критерий истинности жил в одном месте, а не дублировался по стратегиям; это вычисляемые данные, а не зарегистрированный код (в отличие от `registerCondition`, который регистрирует функцию-оператор).
+
 ## Проверка конфигурации
 
 `validateConfig` проверяет:
@@ -270,7 +299,8 @@ type Runtime = {
 - отсутствующие стратегии в `then`, `catch` и `entrypoints`;
 - недопустимые режимы;
 - недопустимые ссылки на пути;
-- циклы без завершающего шага.
+- циклы без завершающего шага;
+- ссылки на guards (`GUARD_NOT_FOUND`, `GUARD_CYCLE`, `GUARD_INVALID`).
 
 ## Трассировка
 
