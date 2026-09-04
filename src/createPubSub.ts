@@ -12,9 +12,7 @@ import { isBusEvent } from '~/helpers/pubSub/isBusEvent'
 import { matchesTopic } from '~/helpers/pubSub/matchesTopic'
 import { serializeError } from '~/helpers/pubSub/serializeError'
 
-export const createPubSub = <TEvents extends object = EventMap>(
-  options: BusOptions<TEvents> = {}
-): Bus<TEvents> => {
+export const createPubSub = <TEvents extends object = EventMap>(options: BusOptions<TEvents> = {}): Bus<TEvents> => {
   const subscribers = new Map<string, Set<(event: BusEvent<unknown>) => void>>()
   const wildcardSubscribers = new Map<string, Set<(event: BusEvent<unknown>) => void>>()
 

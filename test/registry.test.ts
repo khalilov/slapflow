@@ -1,19 +1,16 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { createRunner } from '~/runner'
-import { createActionsRegistry } from '~/registry/actions'
-import { createConditionsRegistry } from '~/registry/conditions'
-import { type Config } from '~/types'
+import { createRunner } from '~/createRunner'
+import { BUILTIN_ACTIONS } from '~/helpers/actions'
+import { BUILTIN_CONDITIONS } from '~/helpers/conditions'
 
 type Ctx = {
   value?: number
 }
 
 describe('registry', () => {
-  it('creates actions registry with every built-in action', () => {
-    const registry = createActionsRegistry<Ctx, string>()
-
-    assert.deepEqual([...registry.keys()].sort(), [
+  it('lists every built-in action', () => {
+    assert.deepEqual(BUILTIN_ACTIONS.map(([name]) => name).sort(), [
       'core.delay',
       'core.emit',
       'core.fail',
@@ -30,10 +27,8 @@ describe('registry', () => {
     ])
   })
 
-  it('creates conditions registry with every built-in condition', () => {
-    const registry = createConditionsRegistry<Ctx>()
-
-    assert.deepEqual([...registry.keys()].sort(), [
+  it('lists every built-in condition', () => {
+    assert.deepEqual(BUILTIN_CONDITIONS.map(([name]) => name).sort(), [
       'changed',
       'cooldownReady',
       'empty',
@@ -53,33 +48,16 @@ describe('registry', () => {
     ])
   })
 
-  it('allows a runner to override a built-in action without affecting another runner', async () => {
-    const first = createRunner<Ctx, string>()
-    const second = createRunner<Ctx, string>()
+  it('rejects overriding a built-in action', () => {
+    const runner = createRunner<Ctx, string>()
 
-    first.registerAction('core.patch', () => ({ patch: 'override' }))
-    first.loadConfig({ strategies: { root: { fn: 'core.patch', props: { patch: 'builtin' } } } })
-    second.loadConfig({ strategies: { root: { fn: 'core.patch', props: { patch: 'builtin' } } } })
-
-    assert.deepEqual((await first.run('root', {})).patches, ['override'])
-    assert.deepEqual((await second.run('root', {})).patches, ['builtin'])
+    assert.throws(() => runner.registerAction('core.patch', () => ({ patch: 'override' })), /core\.patch/)
   })
 
-  it('allows a runner to override a built-in condition without affecting another runner', async () => {
-    const first = createRunner<Ctx, string>()
-    const second = createRunner<Ctx, string>()
-    const config: Config = {
-      strategies: {
-        root: { fn: 'core.patch', props: { patch: 'matched' }, when: ['eq', 1, 2] },
-      },
-    }
+  it('rejects overriding a built-in condition', () => {
+    const runner = createRunner<Ctx, string>()
 
-    first.registerCondition('eq', () => true)
-    first.loadConfig(config)
-    second.loadConfig(config)
-
-    assert.deepEqual((await first.run('root', {})).patches, ['matched'])
-    assert.deepEqual((await second.run('root', {})).patches, [])
+    assert.throws(() => runner.registerCondition('eq', () => true), /eq/)
   })
 
   it('registers actions and conditions in batches before validation', () => {

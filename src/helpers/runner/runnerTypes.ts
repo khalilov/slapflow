@@ -7,8 +7,8 @@ import {
   type TraceSink,
   type Variables,
 } from '~/types'
-import { type ActionsRegistry } from '~/registry/actions'
-import { type ConditionsRegistry } from '~/registry/conditions'
+import { type ActionsRegistry } from '~/helpers/actions'
+import { type ConditionsRegistry } from '~/helpers/conditions'
 
 export type Normalized<TContext, TPatch> =
   | {
@@ -49,8 +49,10 @@ export type RunState<TContext, TPatch> = {
 }
 
 export type RunnerEnvironment<TContext, TPatch> = {
-  actionsRegistry: ActionsRegistry<TContext, TPatch>
-  conditionsRegistry: ConditionsRegistry<TContext>
+  registry: {
+    actions: ActionsRegistry<TContext, TPatch>
+    conditions: ConditionsRegistry<TContext>
+  }
   configRef: { current?: Config }
   options: RunnerOptions<TContext, TPatch>
   mergeData: (current: Record<string, unknown>, next: Record<string, unknown>) => Record<string, unknown>

@@ -1,5 +1,5 @@
 import { type ActionResult, type Props } from '~/types'
-import { SyncAsyncError } from '~/errors'
+import { SyncAsyncError } from '~/helpers/errors/syncAsyncError'
 import { afterAction } from '~/helpers/runner/afterAction'
 import { slapError } from '~/helpers/errors/slapError'
 import { cloneData } from '~/helpers/trace/cloneData'
@@ -62,7 +62,7 @@ export const executeStrategy = <TContext, TPatch>(
       events: [],
     }
   }
-  const action = environment.actionsRegistry.get(strategy.fn)
+  const action = environment.registry.actions.get(strategy.fn)
   if (!action) {
     return {
       status: 'failed',
@@ -121,7 +121,7 @@ export const executeStrategy = <TContext, TPatch>(
   const traceStep = state.stepCounter.current + 1
   const startedAt = Date.now()
 
-  const condition = evaluateCondition(strategy.when, environment.conditionsRegistry, {
+  const condition = evaluateCondition(strategy.when, environment.registry.conditions, {
     ...state,
     runtime,
     strategy: id,

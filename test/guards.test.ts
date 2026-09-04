@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { createRunner } from '~/runner'
-import { createFlow } from '~/flow'
-import { createPubSub } from '~/pubSub'
+import { createRunner } from '~/createRunner'
+import { createFlow } from '~/createFlow'
+import { createPubSub } from '~/createPubSub'
 
 describe('guards', () => {
   it('substitutes the guard expression into the strategy, not the reference', () => {
@@ -27,7 +27,10 @@ describe('guards', () => {
     })
 
     assert.equal(result.ok, false)
-    assert.equal(result.errors.some(({ code }) => code === 'GUARD_NOT_FOUND'), true)
+    assert.equal(
+      result.errors.some(({ code }) => code === 'GUARD_NOT_FOUND'),
+      true
+    )
   })
 
   it('reports a guard reference cycle', () => {
@@ -38,7 +41,10 @@ describe('guards', () => {
     })
 
     assert.equal(result.ok, false)
-    assert.equal(result.errors.some(({ code }) => code === 'GUARD_CYCLE'), true)
+    assert.equal(
+      result.errors.some(({ code }) => code === 'GUARD_CYCLE'),
+      true
+    )
   })
 
   it('nests guards inside and/or/not expressions', () => {

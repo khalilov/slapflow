@@ -1,21 +1,15 @@
-import {
-  type Bus,
-  type EventMap,
-  type EventName,
-  type WS,
-  type WSOptions,
-  type WSSocket,
-  type WSStatus,
-} from '~/types'
+import { type Bus, type EventMap, type EventName, type WS, type WSOptions, type WSSocket, type WSStatus } from '~/types'
 import { getRetryDelay } from '~/helpers/retry/getRetryDelay'
 import { matchesTopic } from '~/helpers/pubSub/matchesTopic'
 
 const openState = 1
 const maxSeenEvents = 1_000
 
-export const createWS = <TEvents extends object = EventMap>(
-  options: WSOptions<TEvents>
-): WS => {
+/**
+ * @deprecated Use `createWebSocket` instead. This adapter will be removed in a future release.
+ */
+export const createWS = <TEvents extends object = EventMap>(options: WSOptions<TEvents>): WS => {
+  console.warn('[slapflow] createWS is deprecated and will be removed soon. Use createWebSocket instead.')
   const inboundTopics = new Set<string>(options.inboundTopics ?? [])
   const outboundTopics = new Set<string>(options.outboundTopics ?? [])
   const seenEventIds = new Set<string>()

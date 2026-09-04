@@ -31,10 +31,7 @@ export type Next =
       when?: ConditionExpression
     }
 
-export type ConditionExpression =
-  | boolean
-  | [operator: string, ...args: unknown[]]
-  | ['guard', name: string]
+export type ConditionExpression = boolean | [operator: string, ...args: unknown[]] | ['guard', name: string]
 
 export type Action<TContext, TPatch = unknown> = (
   args: ActionArgs<TContext>
@@ -49,12 +46,7 @@ export type ActionArgs<TContext> = {
 }
 
 export type ActionResult<TContext, TPatch = unknown> =
-  | void
-  | false
-  | ActionSuccess<TContext, TPatch>
-  | ActionSkip
-  | ActionStop<TPatch>
-  | ActionFail
+  void | false | ActionSuccess<TContext, TPatch> | ActionSkip | ActionStop<TPatch> | ActionFail
 
 export type ActionSuccess<TContext, TPatch> = {
   type?: 'success'
@@ -193,6 +185,25 @@ export type WS = {
   status(): WSStatus
 }
 
+export type SocketEventTopic = 'open' | 'message' | 'close' | 'error'
+
+export type WebSocketOptions<TEvents extends object = EventMap> = {
+  url: string
+  bus: Bus<TEvents>
+  origin?: string
+  protocols?: string | string[]
+  reconnect?: RetryOptions
+}
+
+export type WebSocketStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'stopped'
+
+export type WSClient = {
+  start(): void
+  stop(): void
+  reconnect(): void
+  status(): WebSocketStatus
+}
+
 export type BindingEventMap = Record<string, Input>
 
 export type BusBindingKey<TEvents extends object> = {
@@ -255,11 +266,10 @@ export type FlowDefinition<TContext, TPatch = unknown, TEvents extends object = 
   events?: BusBindings<TEvents> & DomBindings
 }
 
-export type FlowOptions<
+export type FlowOptions<TContext, TPatch = unknown, TEvents extends object = BindingEventMap> = RunnerOptions<
   TContext,
-  TPatch = unknown,
-  TEvents extends object = BindingEventMap,
-> = RunnerOptions<TContext, TPatch> & {
+  TPatch
+> & {
   context: TContext | (() => TContext)
   bus?: Bus<TEvents>
   root?: Document | Element
@@ -329,13 +339,7 @@ export type Runtime = {
 }
 
 export type VariableValue =
-  | string
-  | number
-  | boolean
-  | bigint
-  | null
-  | readonly VariableValue[]
-  | { readonly [key: string]: VariableValue }
+  string | number | boolean | bigint | null | readonly VariableValue[] | { readonly [key: string]: VariableValue }
 
 export type Variables = Readonly<Record<string, VariableValue>>
 
@@ -446,16 +450,6 @@ export type Runner<TContext, TPatch = unknown> = {
   registerConditions(conditions: Record<string, ConditionFn<TContext>>): void
   loadConfig(config: Config): ValidationResult
   validateConfig(config?: Config): ValidationResult
-  run(
-    entrypoint: string,
-    context: TContext,
-    input?: Input,
-    options?: RunOptions
-  ): Promise<RunResult<TContext, TPatch>>
-  runSync(
-    entrypoint: string,
-    context: TContext,
-    input?: Input,
-    options?: RunOptions
-  ): RunResult<TContext, TPatch>
+  run(entrypoint: string, context: TContext, input?: Input, options?: RunOptions): Promise<RunResult<TContext, TPatch>>
+  runSync(entrypoint: string, context: TContext, input?: Input, options?: RunOptions): RunResult<TContext, TPatch>
 }

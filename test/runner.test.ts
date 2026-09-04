@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it, vi } from 'vitest'
-import { createRunner } from '~/runner'
+import { createRunner } from '~/createRunner'
 
 type Ctx = {
   worker?: { state?: string; queueSize?: number }

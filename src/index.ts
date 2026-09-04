@@ -1,12 +1,13 @@
 export { defineConfig } from '~/helpers/config/defineConfig'
-export { createMemoryTraceSink } from '~/trace'
-export { defineErrorReporter } from '~/errors'
-export { createPubSub, PubSub } from '~/pubSub'
-export { createFlow } from '~/flow'
-export { createWS } from '~/ws'
-export { catchError } from '~/catchError'
-export { createActionsRegistry, type ActionsRegistry } from '~/registry/actions'
-export { createConditionsRegistry, type ConditionsRegistry } from '~/registry/conditions'
+export { createMemoryTraceSink } from '~/helpers/trace/createMemoryTraceSink'
+export { defineErrorReporter } from '~/helpers/errors/defineErrorReporter'
+export { createPubSub, PubSub } from '~/createPubSub'
+export { createFlow } from '~/createFlow'
+export { createWS } from '~/createWS'
+export { createWebSocket } from '~/createWebSocket'
+export { catchError } from '~/helpers/catchError'
+export { BUILTIN_ACTIONS, BUILTIN_ACTION_NAMES, type ActionsRegistry } from '~/helpers/actions'
+export { BUILTIN_CONDITIONS, BUILTIN_CONDITION_NAMES, type ConditionsRegistry } from '~/helpers/conditions'
 export {
   type Action,
   type ActionArgs,
@@ -72,6 +73,10 @@ export {
   type WSRetryOptions,
   type WSSocket,
   type WSStatus,
+  type SocketEventTopic,
+  type WebSocketOptions,
+  type WebSocketStatus,
+  type WSClient,
   type Flow,
   type FlowDefinition,
   type FlowOptions,

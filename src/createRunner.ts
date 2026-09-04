@@ -9,9 +9,9 @@ import {
   type RunnerOptions,
   type ValidationResult,
 } from '~/types'
-import { SyncAsyncError } from '~/errors'
-import { createActionsRegistry } from '~/registry/actions'
-import { createConditionsRegistry } from '~/registry/conditions'
+import { SyncAsyncError } from '~/helpers/errors/syncAsyncError'
+import { BUILTIN_ACTION_NAMES, BUILTIN_ACTIONS, type ActionsRegistry } from '~/helpers/actions'
+import { BUILTIN_CONDITION_NAMES, BUILTIN_CONDITIONS, type ConditionsRegistry } from '~/helpers/conditions'
 import { createMemoryTraceSink } from '~/helpers/trace/createMemoryTraceSink'
 import { executeStrategy } from '~/helpers/runner/executeStrategy'
 import { finishRunResult } from '~/helpers/runner/finishRunResult'
@@ -28,8 +28,8 @@ import { createRunCancellation } from '~/helpers/runner/createRunCancellation'
 export const createRunner = <TContext, TPatch = unknown>(
   options: RunnerOptions<TContext, TPatch> = {}
 ): Runner<TContext, TPatch> => {
-  const actionsRegistry = createActionsRegistry<TContext, TPatch>()
-  const conditionsRegistry = createConditionsRegistry<TContext>()
+  const actionsRegistry = new Map(BUILTIN_ACTIONS) as ActionsRegistry<TContext, TPatch>
+  const conditionsRegistry = new Map(BUILTIN_CONDITIONS) as ConditionsRegistry<TContext>
   const configRef: { current?: Config } = {}
   const timeout = options.timeout ?? options.timeoutMs
   const runnerOptions = timeout === undefined ? options : { ...options, timeout }
@@ -41,14 +41,16 @@ export const createRunner = <TContext, TPatch = unknown>(
   }
 
   const environment: RunnerEnvironment<TContext, TPatch> = {
-    actionsRegistry,
-    conditionsRegistry,
+    registry: { actions: actionsRegistry, conditions: conditionsRegistry },
     configRef,
     options: runnerOptions,
     mergeData,
   }
 
   const registerAction = (name: string, action: Action<TContext, TPatch>): void => {
+    if (BUILTIN_ACTION_NAMES.has(name)) {
+      throw new Error(`Cannot override built-in action "${name}"`)
+    }
     actionsRegistry.set(name, action)
   }
 
@@ -57,6 +59,9 @@ export const createRunner = <TContext, TPatch = unknown>(
   }
 
   const registerCondition = (name: string, condition: ConditionFn<TContext>): void => {
+    if (BUILTIN_CONDITION_NAMES.has(name)) {
+      throw new Error(`Cannot override built-in condition "${name}"`)
+    }
     conditionsRegistry.set(name, condition)
   }
 

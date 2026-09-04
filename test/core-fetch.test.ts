@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, it, vi } from 'vitest'
-import { createRunner } from '~/runner'
+import { createRunner } from '~/createRunner'
 
 const runFetch = async (props: Record<string, unknown>, signal?: AbortSignal) => {
   const runner = createRunner()
@@ -41,7 +41,9 @@ describe('core.fetch', () => {
   })
 
   it('does not retry a response parsing failure', async () => {
-    const fetch = vi.fn(async (_url: RequestInfo | URL, _options?: RequestInit) => new Response('not json', { status: 200 }))
+    const fetch = vi.fn(
+      async (_url: RequestInfo | URL, _options?: RequestInit) => new Response('not json', { status: 200 })
+    )
 
     vi.stubGlobal('fetch', fetch)
 

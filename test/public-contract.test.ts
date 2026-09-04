@@ -3,12 +3,12 @@ import { readFile } from 'node:fs/promises'
 import { describe, it } from 'vitest'
 import { createBuiltinActions } from '~/builtins/actions'
 import { createBuiltinConditions } from '~/builtins/conditions'
-import { createRunner } from '~/runner'
+import { createRunner } from '~/createRunner'
 import {
   defineConfig,
-  createActionsRegistry,
-  createConditionsRegistry,
   createMemoryTraceSink,
+  BUILTIN_ACTIONS,
+  BUILTIN_CONDITIONS,
   type Action,
   type ConditionFn,
   type RunResult,
@@ -57,8 +57,8 @@ describe('public contract', () => {
     const result: RunResult<Ctx, string> = await runner.run('root', { count: 2 })
 
     assert.deepEqual(result.patches, ['2'])
-    assert.equal(createActionsRegistry<Ctx, string>().has('core.noop'), true)
-    assert.equal(createConditionsRegistry<Ctx>().has('eq'), true)
+    assert.equal(new Map(BUILTIN_ACTIONS).has('core.noop'), true)
+    assert.equal(new Map(BUILTIN_CONDITIONS).has('eq'), true)
     assert.equal(defineConfig(config), config)
   })
 

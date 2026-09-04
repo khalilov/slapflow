@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { createConditionsRegistry } from '~/registry/conditions'
+import { BUILTIN_CONDITIONS } from '~/helpers/conditions'
 import { includesCondition } from '~/helpers/conditions/includesCondition'
 import { sizeOf } from '~/helpers/conditions/sizeOf'
 import { evaluateCondition } from '~/helpers/runner/evaluateCondition'
@@ -44,7 +44,7 @@ const createScope = (context: Ctx = {}, data: Record<string, unknown> = {}) => {
 }
 
 const assertMatches = (expression: Parameters<typeof evaluateCondition<Ctx>>[0], expected: boolean): void => {
-  const result = evaluateCondition(expression, createConditionsRegistry<Ctx>(), createScope())
+  const result = evaluateCondition(expression, new Map(BUILTIN_CONDITIONS), createScope())
 
   assert.deepEqual(result, { ok: true, matched: expected })
 }
@@ -112,7 +112,7 @@ describe('built-in conditions', () => {
   it('resolves path references before condition execution', () => {
     const result = evaluateCondition(
       ['and', ['eq', '$context.count', 2], ['eq', '$data.selected', '$input.target']],
-      createConditionsRegistry<Ctx>(),
+      new Map(BUILTIN_CONDITIONS),
       createScope({ count: 2 }, { selected: 'alpha' })
     )
 
@@ -128,7 +128,7 @@ describe('built-in conditions', () => {
   })
 
   it('returns an error for unknown condition operators', () => {
-    const result = evaluateCondition(['unknown'], createConditionsRegistry<Ctx>(), createScope())
+    const result = evaluateCondition(['unknown'], new Map(BUILTIN_CONDITIONS), createScope())
 
     assert.equal(result.ok, false)
     if (!result.ok) {
@@ -137,7 +137,7 @@ describe('built-in conditions', () => {
   })
 
   it('uses a valid error path when strategy is omitted', () => {
-    const result = evaluateCondition(['eq', '$variables.MISSING', 1], createConditionsRegistry<Ctx>(), createScope())
+    const result = evaluateCondition(['eq', '$variables.MISSING', 1], new Map(BUILTIN_CONDITIONS), createScope())
 
     assert.equal(result.ok, false)
     if (!result.ok) {

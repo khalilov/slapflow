@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, expect, it, vi } from 'vitest'
-import { createRunner } from '~/runner'
+import { createRunner } from '~/createRunner'
 import { createMemoryTraceSink, type Config } from '~/index'
 import { createRuntime } from '~/helpers/runner/createRuntime'
 import { type RunState } from '~/helpers/runner/runnerTypes'

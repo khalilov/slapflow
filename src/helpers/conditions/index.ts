@@ -18,22 +18,23 @@ import { typeIsCondition } from '~/helpers/conditions/typeIsCondition'
 
 export type ConditionsRegistry<TContext> = Map<string, ConditionFn<TContext>>
 
-export const createConditionsRegistry = <TContext>(): ConditionsRegistry<TContext> =>
-  new Map<string, ConditionFn<TContext>>([
-    ['eq', eqCondition],
-    ['neq', neqCondition],
-    ['gt', gtCondition],
-    ['gte', gteCondition],
-    ['lt', ltCondition],
-    ['lte', lteCondition],
-    ['truthy', truthyCondition],
-    ['falsy', falsyCondition],
-    ['exists', existsCondition],
-    ['missing', missingCondition],
-    ['empty', emptyCondition],
-    ['notEmpty', notEmptyCondition],
-    ['includes', includesCondition],
-    ['typeIs', typeIsCondition],
-    ['changed', changedCondition],
-    ['cooldownReady', cooldownReadyCondition],
-  ])
+export const BUILTIN_CONDITIONS: readonly [name: string, condition: ConditionFn<unknown>][] = [
+  ['eq', eqCondition],
+  ['neq', neqCondition],
+  ['gt', gtCondition],
+  ['gte', gteCondition],
+  ['lt', ltCondition],
+  ['lte', lteCondition],
+  ['truthy', truthyCondition],
+  ['falsy', falsyCondition],
+  ['exists', existsCondition],
+  ['missing', missingCondition],
+  ['empty', emptyCondition],
+  ['notEmpty', notEmptyCondition],
+  ['includes', includesCondition],
+  ['typeIs', typeIsCondition],
+  ['changed', changedCondition],
+  ['cooldownReady', cooldownReadyCondition],
+] as readonly [name: string, condition: ConditionFn<unknown>][]
+
+export const BUILTIN_CONDITION_NAMES = new Set<string>(BUILTIN_CONDITIONS.map(([name]) => name))

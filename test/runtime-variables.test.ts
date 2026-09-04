@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { createRunner } from '~/runner'
+import { createRunner } from '~/createRunner'
 import { type Props } from '~/index'
 
 type Context = Record<string, unknown>

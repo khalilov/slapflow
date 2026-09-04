@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { createRunner } from '~/runner'
+import { createRunner } from '~/createRunner'
 import { defineErrorReporter, type SlapErrorEvent } from '~/index'
 
 type Ctx = {
