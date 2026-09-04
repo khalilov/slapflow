@@ -14,6 +14,12 @@ Slapflow takes care of orchestration, concurrency, cancellation, and diagnostics
 - **Make async behavior deliberate.** Choose `parallel`, `latest`, `queue`, or `drop` for each event source. Actions receive an `AbortSignal` when cancellation matters.
 - **Use the same flow in more than one place.** The chain can start from a typed bus, DOM event, API callback, timer, worker, or WebSocket message.
 
+### When to use Slapflow
+
+Slapflow orchestrates a control flow that lives and finishes inside a single process. Reach for it when a scenario spans several steps, branches, and failure paths and you want it in one place rather than spread across handlers and callbacks.
+
+**What it is not:** a web framework (no routing, no middleware stack — pair it with Express, Hono, or Next.js routes) or a job queue (no built-in persistence, no distributed workers). It is also not a durable workflow engine: a chain runs inside a live process and stops with it — a `core.loop` can spin indefinitely while the process runs, but unlike Temporal there is no state that survives a crash or restart unless your application prevails it. It is closest to a lightweight, in-process state machine: decisions, ordering, concurrency, and cancellation live in a chain, while your application keeps the domain state and side effects.
+
 ## Installation
 
 ```bash

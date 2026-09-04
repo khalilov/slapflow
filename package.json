@@ -7,6 +7,14 @@
   "keywords": [
     "behavior",
     "workflow",
+    "orchestration",
+    "state-machine",
+    "event-driven",
+    "concurrency",
+    "cancellation",
+    "pubsub",
+    "fetch",
+    "websocket",
     "action-runner",
     "rules-engine",
     "typescript"

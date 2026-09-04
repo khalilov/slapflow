@@ -119,6 +119,21 @@ type ErrorStage = {
 
 If an error is recovered through `catch`, `onError` is still invoked for the original failure and the final `run` may finish with `success`.
 
+## Action Return Normalization
+
+An action's return value is normalized into one outcome. The mapping:
+
+| Return                                            | Outcome                                                        |
+| ------------------------------------------------- | -------------------------------------------------------------- |
+| `undefined` / `null`                              | `success`                                                      |
+| `false`                                           | `skipped`                                                      |
+| `{ type: 'skip', reason?, data? }`                | `skipped` (a selector tries the next branch)                   |
+| `{ type: 'stop', reason?, patch?, events? }`      | `stopped` (the chain halts without error)                      |
+| `{ type: 'fail', reason?, data?, error? }`        | `failed` (`catch` runs, then `onError`)                        |
+| `{ context?, data?, patch?, events?, continue? }` | `success`; `continue: false` halts the remaining `then` targets |
+
+A thrown exception is treated as `fail`. Returning `false` and `{ type: 'skip' }` are equivalent.
+
 ## Registry Model
 
 The runner uses runner-scoped registries:
@@ -230,6 +245,18 @@ export const config = {
 `selector` executes `then` targets until the first successful or stopped step. `skip` means “try the next option.”
 
 `parallel` runs `then` targets independently. Plain objects and arrays in runtime context and data are cloned for each branch; infrastructure values such as functions, DOM nodes, and class instances remain references. Safety limits, including `maxStepCount`, remain shared by the whole run. Resulting patches and events are returned to the caller; the runner does not apply them.
+
+### Chain interruption
+
+A non-`success` outcome at a step changes what happens next, depending on the mode:
+
+| Outcome   | `sequence`             | `selector`               |
+| --------- | ---------------------- | ------------------------ |
+| `skipped` | **interrupts the rest** | tries the next branch    |
+
+`sequence` is the default mode and interrupts the remaining `then` targets on *any* non-`success` (`skipped`, `stopped`, `failed`) — not only on failure. A conditional step inside a sequence is therefore a hidden early exit for the whole remainder. When skipping a step must not break the chain, wrap it in a selector with a `core.noop` fallback.
+
+`terminal: true` stops the `then` chain after that strategy even on `success`; `continue: false` in `ActionSuccess` has the same effect.
 
 ## Runtime Helpers
 
