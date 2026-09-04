@@ -162,7 +162,7 @@ const config = {
 - A broad set of [built-in conditions](SPEC.md#built-in-conditions) for comparisons, type checks, collections, and compound logic.
 - Typed PubSub bindings and delegated DOM bindings.
 - `parallel`, `latest`, `queue`, and `drop` concurrency modes with per-entity lanes.
-- A WebSocket bridge for forwarding selected bus events.
+- A native WebSocket client that proxies socket events into the bus.
 - `core.fetch` with response parsing, cancellation, and retry backoff.
 - Normalized results, execution trace, validation, and lifecycle diagnostics such as `slapflow.run.started` and `slapflow.run.failed`.
 - Runtime variables for configuration values, templates, and expressions.

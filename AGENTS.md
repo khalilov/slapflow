@@ -8,10 +8,10 @@ Authoritative semantics live in this repo's `SPEC.md` (and `SPEC-RU.md`), not in
 
 1. **A non-matching `when` yields `skipped`, and `sequence` breaks on any non-`success`.** A conditional step inside a sequence is a hidden early exit for the whole remainder. If skipping a step must not break the chain, wrap it in a selector with a `core.noop` fallback.
 
-   | Mode       | `skipped`            | anything else      |
-   | ---------- | -------------------- | ------------------ |
-   | `selector` | try the next branch  | return result      |
-   | `sequence` | **break the rest**   | break the rest     |
+   | Mode       | `skipped`           | anything else  |
+   | ---------- | ------------------- | -------------- |
+   | `selector` | try the next branch | return result  |
+   | `sequence` | **break the rest**  | break the rest |
 
    Default mode is `sequence`. A selector is declared explicitly: `"fn": "core.selector", "mode": "selector"`.
 
@@ -64,11 +64,11 @@ A repeated `when` expression becomes a named guard in `config.guards`, reference
 {
   "guards": {
     "has-colony": ["truthy", "$data.colonyId"],
-    "same-colony": ["eq", "$input.colonyId", "$context.colonyId"]
+    "same-colony": ["eq", "$input.colonyId", "$context.colonyId"],
   },
   "strategies": {
-    "colony.join": { "fn": "colony.join", "when": ["and", ["guard", "has-colony"], ["not", ["guard", "same-colony"]]] }
-  }
+    "colony.join": { "fn": "colony.join", "when": ["and", ["guard", "has-colony"], ["not", ["guard", "same-colony"]]] },
+  },
 }
 ```
 
@@ -113,7 +113,7 @@ A service may register a custom condition whose name duplicates or masks a built
 
 ## Wildcard subscriptions
 
-The pub/sub bus supports pattern subscriptions: `*` matches exactly one dot-delimited segment and does not cross a `.`. Pattern handlers receive `parsed` as `unknown`. Wildcards work in `bus.on`/`bus.off` and in `createWS` `inboundTopics`/`outboundTopics`. See SPEC "Wildcard subscriptions" for exact semantics.
+The pub/sub bus supports pattern subscriptions: `*` matches exactly one dot-delimited segment and does not cross a `.`. Pattern handlers receive `parsed` as `unknown`. Wildcards work in `bus.on`/`bus.off`. See SPEC "Wildcard subscriptions" for exact semantics.
 
 ## Full API reference
 

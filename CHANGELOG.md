@@ -5,14 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] - 2026-09-04
+
+### Added
+
+- `createWebSocket`: a native WebSocket client that proxies socket events (`open`, `message`, `close`, `error`) into the bus and manages reconnection. No wire format is assumed — raw payloads land in `parsed`.
+
+### Changed
+
+- Built-ins are immutable: `registerAction`/`registerCondition` reject overriding a built-in name. Built-in lists now live in `BUILTIN_ACTIONS`/`BUILTIN_CONDITIONS` instead of the removed `createActionsRegistry`/`createConditionsRegistry` factories.
+
+### Deprecated
+
+- `createWS` is deprecated and will be removed; migrate to `createWebSocket`.
 
 ## [1.1.0] - 2026-09-04
 
 ### Added
 
 - Reusable `when` expressions via the `guards` map on `Config`, referenced with the `['guard', name]` node. Guards are expanded once at `loadConfig`; `GUARD_NOT_FOUND`, `GUARD_CYCLE`, and `GUARD_INVALID` are reported during validation.
-- Wildcard pub/sub subscriptions: `*` matches exactly one dot-delimited segment. Wildcards work in `bus.on`/`bus.off` and in `createWS` `inboundTopics`/`outboundTopics`.
+- Wildcard pub/sub subscriptions: `*` matches exactly one dot-delimited segment. Wildcards work in `bus.on`/`bus.off`.
 - Agent guide (`AGENTS.md`) describing how to edit a graph.
 
 ### Changed
@@ -32,4 +44,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2026-08-29
 
 - Initial release: `slapflow` — a runtime for declaring orchestration as a graph. The project was migrated from [`chain-functions-behavior`](https://www.npmjs.com/package/chain-functions-behavior) and rebranded with a new public API.
-

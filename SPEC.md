@@ -12,23 +12,20 @@ The package is not coupled to a UI, server framework, scheduler, or domain model
 
 ```ts
 import {
-  createActionsRegistry,
-  createConditionsRegistry,
+  BUILTIN_ACTIONS,
+  BUILTIN_CONDITIONS,
   createMemoryTraceSink,
   defineErrorReporter,
   createPubSub,
   PubSub,
   createFlow,
-  createWS,
+  createWebSocket,
   catchError,
 } from 'slapflow'
 ```
 
 ```ts
-const flow = createFlow<Context, Patch>(
-  { config: { strategies: {} } },
-  { context: () => ({} as Context) }
-)
+const flow = createFlow<Context, Patch>({ config: { strategies: {} } }, { context: () => ({}) as Context })
 const runner = flow.runner
 
 runner.registerAction('jobs.execute', executeJob)
@@ -48,10 +45,7 @@ type Config = {
   guards?: Record<string, ConditionExpression>
 }
 
-type ConditionExpression =
-  | boolean
-  | [operator: string, ...args: unknown[]]
-  | ['guard', name: string]
+type ConditionExpression = boolean | [operator: string, ...args: unknown[]] | ['guard', name: string]
 
 type Strategy = {
   fn: string
@@ -85,7 +79,7 @@ const reportError = defineErrorReporter({
 
 const flow = createFlow(
   { config: { strategies: {} } },
-  { context: () => ({} as Context), trace: true, onError: reportError }
+  { context: () => ({}) as Context, trace: true, onError: reportError }
 )
 ```
 
@@ -123,39 +117,33 @@ If an error is recovered through `catch`, `onError` is still invoked for the ori
 
 An action's return value is normalized into one outcome. The mapping:
 
-| Return                                            | Outcome                                                        |
-| ------------------------------------------------- | -------------------------------------------------------------- |
-| `undefined` / `null`                              | `success`                                                      |
-| `false`                                           | `skipped`                                                      |
-| `{ type: 'skip', reason?, data? }`                | `skipped` (a selector tries the next branch)                   |
-| `{ type: 'stop', reason?, patch?, events? }`      | `stopped` (the chain halts without error)                      |
-| `{ type: 'fail', reason?, data?, error? }`        | `failed` (`catch` runs, then `onError`)                        |
+| Return                                            | Outcome                                                         |
+| ------------------------------------------------- | --------------------------------------------------------------- |
+| `undefined` / `null`                              | `success`                                                       |
+| `false`                                           | `skipped`                                                       |
+| `{ type: 'skip', reason?, data? }`                | `skipped` (a selector tries the next branch)                    |
+| `{ type: 'stop', reason?, patch?, events? }`      | `stopped` (the chain halts without error)                       |
+| `{ type: 'fail', reason?, data?, error? }`        | `failed` (`catch` runs, then `onError`)                         |
 | `{ context?, data?, patch?, events?, continue? }` | `success`; `continue: false` halts the remaining `then` targets |
 
 A thrown exception is treated as `fail`. Returning `false` and `{ type: 'skip' }` are equivalent.
 
 ## Registry Model
 
-The runner uses runner-scoped registries:
+Built-ins live in two shared constants, one per kind:
 
-```text
-src/registry/
-  actions.ts
-  conditions.ts
+```ts
+import { BUILTIN_ACTIONS, BUILTIN_CONDITIONS } from 'slapflow'
 ```
 
-`createActionsRegistry()` creates a `Map` prepopulated with built-in actions.
+`BUILTIN_ACTIONS` is a readonly `[name, action][]` list prepopulated with built-in actions; `BUILTIN_CONDITIONS` holds built-in conditions. Each runner receives its own `new Map(BUILTIN_ACTIONS)` / `new Map(BUILTIN_CONDITIONS)` seed, so registrations stay isolated per runner.
 
-`createConditionsRegistry()` creates a `Map` prepopulated with built-in conditions.
-
-Each runner receives its own mutable registry copy. Applications can override any built-in action or condition:
+Built-ins are immutable defaults: `registerAction` and `registerCondition` reject an attempt to override a built-in name.
 
 ```ts
 runner.registerAction('app.setData', customSetData)
-runner.registerCondition('eq', customEq)
+runner.registerCondition('hasQueue', hasItems)
 ```
-
-Built-ins are therefore default values, not a separate immutable layer.
 
 Configuration validation accesses registries through the minimal `has(name)` contract.
 
@@ -250,11 +238,11 @@ export const config = {
 
 A non-`success` outcome at a step changes what happens next, depending on the mode:
 
-| Outcome   | `sequence`             | `selector`               |
-| --------- | ---------------------- | ------------------------ |
-| `skipped` | **interrupts the rest** | tries the next branch    |
+| Outcome   | `sequence`              | `selector`            |
+| --------- | ----------------------- | --------------------- |
+| `skipped` | **interrupts the rest** | tries the next branch |
 
-`sequence` is the default mode and interrupts the remaining `then` targets on *any* non-`success` (`skipped`, `stopped`, `failed`) — not only on failure. A conditional step inside a sequence is therefore a hidden early exit for the whole remainder. When skipping a step must not break the chain, wrap it in a selector with a `core.noop` fallback.
+`sequence` is the default mode and interrupts the remaining `then` targets on _any_ non-`success` (`skipped`, `stopped`, `failed`) — not only on failure. A conditional step inside a sequence is therefore a hidden early exit for the whole remainder. When skipping a step must not break the chain, wrap it in a selector with a `core.noop` fallback.
 
 `terminal: true` stops the `then` chain after that strategy even on `success`; `continue: false` in `ActionSuccess` has the same effect.
 
@@ -399,12 +387,12 @@ type BusEvent<TPayload> = {
 A topic may be subscribed by pattern, using `*` to match exactly one dot-delimited segment. A wildcard does not cross a `.` boundary.
 
 ```ts
-bus.on('hub.user.*', ({ parsed }) => {})       // hub.user.created, hub.user.deleted
-bus.on('hub.*.created', ({ parsed }) => {})    // hub.user.created, hub.team.created
-bus.on('hub.*.export', ({ parsed }) => {})     // NOT hub.user.audit.export (wildcard spans one segment)
+bus.on('hub.user.*', ({ parsed }) => {}) // hub.user.created, hub.user.deleted
+bus.on('hub.*.created', ({ parsed }) => {}) // hub.user.created, hub.team.created
+bus.on('hub.*.export', ({ parsed }) => {}) // NOT hub.user.audit.export (wildcard spans one segment)
 ```
 
-Exact-name subscriptions stay O(1); wildcard patterns are matched separately, so registrations without `*` pay no matching cost. A wildcard handler receives `parsed` as `unknown` — narrow it before use. Wildcards work in `bus.on`/`bus.off` and in `inboundTopics`/`outboundTopics` of `createWS`.
+Exact-name subscriptions stay O(1); wildcard patterns are matched separately, so registrations without `*` pay no matching cost. A wildcard handler receives `parsed` as `unknown` — narrow it before use. Wildcards work in `bus.on`/`bus.off`.
 
 ## Flow
 
@@ -489,24 +477,30 @@ A DOM binding key uses the `[dom] <css-selector>:<event>` format. Slapflow insta
 
 `defaultInput` has type `{ type, value?, dataset, form? }`. `dataset` contains all `data-*` attributes from the matching element as camelCase keys. `form` is built from the nearest `<form>`; repeated form entries become arrays and `File` remains `File`. For `submit`, `preventDefault` defaults to `true`; for other events, it and `stopPropagation` default to `false`.
 
-### WebSocket Bridge
+### WebSocket Client
 
-`createWS` connects a bus to a WebSocket-like transport. The bridge accepts `createSocket`, so it works with browser WebSocket and a server adapter alike.
+`createWebSocket` opens a native `WebSocket` to `url` and proxies every socket event into the bus. No wire format is assumed — each event is dispatched with a fixed topic and an envelope whose `parsed` holds the raw payload.
 
 ```ts
-const ws = createWS({
+const socket = createWebSocket({
+  url,
   bus,
-  createSocket: () => new WebSocket(url),
-  inboundTopics: ['order.created'],
-  outboundTopics: ['slapflow.run.finished'],
-  origin: 'worker',
-  retry: { initialDelay: 500, maxDelay: 10_000, multiplier: 2, jitter: true, maxAttempts: 5 },
+  origin: 'client',
 })
 
-ws.start()
+socket.start()
 ```
 
-Inbound topics pass an explicit allowlist. Each entry may be an exact topic or a wildcard pattern, where `*` matches one dot-delimited segment. The bridge parses a JSON envelope and calls `bus.dispatch(event)`, preserving `id`, `occurredAt`, `origin`, `parsed`, and `serialized`; it remembers accepted inbound IDs and does not send them back outbound. Outbound topics send the complete event envelope as JSON, so the remote bridge can dispatch it without recreating its identity. `maxAttempts` limits reconnects; omitting it retries indefinitely. `start`, `stop`, `reconnect`, and `status` manage the transport lifecycle. Diagnostics: `slapflow.ws.connecting`, `slapflow.ws.connected`, `slapflow.ws.disconnected`, `slapflow.ws.retrying`, and `slapflow.ws.message.rejected`.
+```ts
+bus.on('message', ({ parsed }) => {}) // parsed = the raw message (JSON-decoded when possible)
+bus.on('open', ({ parsed }) => {}) // { url }
+bus.on('close', ({ parsed }) => {}) // { code, reason }
+bus.on('error', ({ parsed }) => {}) // { error }
+```
+
+Socket events are forwarded with the topic `open`, `message`, `close`, or `error`. `message` payloads are JSON-decoded into `parsed` when valid, otherwise kept as the raw string. Filtering topics is the consumer's responsibility — nothing is allow-listed or rejected inside the client. `reconnect` accepts `initialDelay`, `maxDelay`, `multiplier`, `jitter`, and `maxAttempts`; omitting `maxAttempts` retries indefinitely. `start`, `stop`, `reconnect`, and `status` manage the lifecycle; status is one of `idle`, `connecting`, `connected`, `reconnecting`, or `stopped`.
+
+`createWS` is deprecated and will be removed; migrate to `createWebSocket`.
 
 ## Safety Limits
 

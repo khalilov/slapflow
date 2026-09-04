@@ -12,23 +12,20 @@
 
 ```ts
 import {
-  createActionsRegistry,
-  createConditionsRegistry,
+  BUILTIN_ACTIONS,
+  BUILTIN_CONDITIONS,
   createMemoryTraceSink,
   defineErrorReporter,
   createPubSub,
   PubSub,
   createFlow,
-  createWS,
+  createWebSocket,
   catchError,
 } from 'slapflow'
 ```
 
 ```ts
-const flow = createFlow<Context, Patch>(
-  { config: { strategies: {} } },
-  { context: () => ({} as Context) }
-)
+const flow = createFlow<Context, Patch>({ config: { strategies: {} } }, { context: () => ({}) as Context })
 const runner = flow.runner
 
 runner.registerAction('jobs.execute', executeJob)
@@ -48,10 +45,7 @@ type Config = {
   guards?: Record<string, ConditionExpression>
 }
 
-type ConditionExpression =
-  | boolean
-  | [operator: string, ...args: unknown[]]
-  | ['guard', name: string]
+type ConditionExpression = boolean | [operator: string, ...args: unknown[]] | ['guard', name: string]
 
 type Strategy = {
   fn: string
@@ -85,7 +79,7 @@ const reportError = defineErrorReporter({
 
 const flow = createFlow(
   { config: { strategies: {} } },
-  { context: () => ({} as Context), trace: true, onError: reportError }
+  { context: () => ({}) as Context, trace: true, onError: reportError }
 )
 ```
 
@@ -123,39 +117,33 @@ type ErrorStage = {
 
 Возвращаемое значение действия нормализуется в один итог. Соответствие:
 
-| Возврат                                           | Итог                                                         |
-| ------------------------------------------------- | ------------------------------------------------------------ |
-| `undefined` / `null`                              | `success`                                                    |
-| `false`                                           | `skipped`                                                    |
-| `{ type: 'skip', reason?, data? }`                | `skipped` (селектор пробует следующую ветку)                 |
-| `{ type: 'stop', reason?, patch?, events? }`      | `stopped` (цепочка останавливается без ошибки)               |
-| `{ type: 'fail', reason?, data?, error? }`        | `failed` (запускается `catch`, затем `onError`)              |
+| Возврат                                           | Итог                                                          |
+| ------------------------------------------------- | ------------------------------------------------------------- |
+| `undefined` / `null`                              | `success`                                                     |
+| `false`                                           | `skipped`                                                     |
+| `{ type: 'skip', reason?, data? }`                | `skipped` (селектор пробует следующую ветку)                  |
+| `{ type: 'stop', reason?, patch?, events? }`      | `stopped` (цепочка останавливается без ошибки)                |
+| `{ type: 'fail', reason?, data?, error? }`        | `failed` (запускается `catch`, затем `onError`)               |
 | `{ context?, data?, patch?, events?, continue? }` | `success`; `continue: false` прерывает оставшиеся `then`-цели |
 
 Брошенное исключение трактуется как `fail`. Возврат `false` и `{ type: 'skip' }` эквивалентны.
 
 ## Модель реестров
 
-Исполнитель использует собственные реестры:
+Встроенные элементы живут в двух общих константах — по одной на вид:
 
-```text
-src/registry/
-  actions.ts
-  conditions.ts
+```ts
+import { BUILTIN_ACTIONS, BUILTIN_CONDITIONS } from 'slapflow'
 ```
 
-`createActionsRegistry()` создаёт `Map`, предварительно заполненный встроенными действиями.
+`BUILTIN_ACTIONS` — это readonly-список `[name, action][]`, предварительно заполненный встроенными действиями; `BUILTIN_CONDITIONS` содержит встроенные условия. Каждый исполнитель получает собственный `new Map(BUILTIN_ACTIONS)` / `new Map(BUILTIN_CONDITIONS)`, поэтому регистрации остаются изолированными по исполнителям.
 
-`createConditionsRegistry()` создаёт `Map`, предварительно заполненный встроенными условиями.
-
-Каждый исполнитель получает собственную изменяемую копию реестра. Приложения могут переопределить любое встроенное действие или условие:
+Встроенные элементы неизменяемы: `registerAction` и `registerCondition` отклоняют попытку переопределить встроенное имя.
 
 ```ts
 runner.registerAction('app.setData', customSetData)
-runner.registerCondition('eq', customEq)
+runner.registerCondition('hasQueue', hasItems)
 ```
-
-Таким образом, встроенные элементы являются значениями по умолчанию, а не отдельным неизменяемым слоем.
 
 Проверка конфигурации обращается к реестрам через минимальный контракт `has(name)`.
 
@@ -250,11 +238,11 @@ export const config = {
 
 Не-`success` итог шага меняет дальнейшее поведение в зависимости от режима:
 
-| Итог     | `sequence`                | `selector`                 |
-| -------- | ------------------------- | -------------------------- |
-| `skipped`| **прерывает остаток**      | пробует следующую ветку    |
+| Итог      | `sequence`            | `selector`              |
+| --------- | --------------------- | ----------------------- |
+| `skipped` | **прерывает остаток** | пробует следующую ветку |
 
-`sequence` — режим по умолчанию, и он прерывает оставшиеся `then`-цели на *любом* не-`success` (`skipped`, `stopped`, `failed`) — не только на сбое. Условный шаг внутри последовательности — это, таким образом, скрытый ранний выход для всего остатка. Если пропуск шага не должен рвать цепочку, заверните его в селектор с запасным `core.noop`.
+`sequence` — режим по умолчанию, и он прерывает оставшиеся `then`-цели на _любом_ не-`success` (`skipped`, `stopped`, `failed`) — не только на сбое. Условный шаг внутри последовательности — это, таким образом, скрытый ранний выход для всего остатка. Если пропуск шага не должен рвать цепочку, заверните его в селектор с запасным `core.noop`.
 
 `terminal: true` останавливает `then`-цепочку после этой стратегии даже при `success`; `continue: false` в `ActionSuccess` даёт тот же эффект.
 
@@ -399,12 +387,12 @@ type BusEvent<TPayload> = {
 На тему можно подписаться по шаблону, где `*` соответствует ровно одному сегменту, разделённому точкой. Шаблонный символ не пересекает границу `.`.
 
 ```ts
-bus.on('hub.user.*', ({ parsed }) => {})       // hub.user.created, hub.user.deleted
-bus.on('hub.*.created', ({ parsed }) => {})    // hub.user.created, hub.team.created
-bus.on('hub.*.export', ({ parsed }) => {})     // НЕ hub.user.audit.export (один сегмент)
+bus.on('hub.user.*', ({ parsed }) => {}) // hub.user.created, hub.user.deleted
+bus.on('hub.*.created', ({ parsed }) => {}) // hub.user.created, hub.team.created
+bus.on('hub.*.export', ({ parsed }) => {}) // НЕ hub.user.audit.export (один сегмент)
 ```
 
-Подписки с точным именем остаются O(1); шаблоны обрабатываются отдельно, поэтому регистрации без `*` не несут накладных затрат на сравнение. Обработчик шаблона получает `parsed` как `unknown` — сужайте тип перед использованием. Шаблоны работают в `bus.on`/`bus.off`, а также в `inboundTopics`/`outboundTopics` у `createWS`.
+Подписки с точным именем остаются O(1); шаблоны обрабатываются отдельно, поэтому регистрации без `*` не несут накладных затрат на сравнение. Обработчик шаблона получает `parsed` как `unknown` — сужайте тип перед использованием. Шаблоны работают в `bus.on`/`bus.off`.
 
 ## Поток
 
@@ -489,24 +477,30 @@ type ConcurrencyOptions<TPayload> = {
 
 `defaultInput` имеет тип `{ type, value?, dataset, form? }`. `dataset` содержит все атрибуты `data-*` совпавшего элемента в виде ключей camelCase. `form` строится по ближайшему элементу `<form>`; повторяющиеся поля формы превращаются в массивы, а `File` остаётся `File`. Для `submit` значение `preventDefault` по умолчанию равно `true`; для остальных событий оно и `stopPropagation` по умолчанию равны `false`.
 
-### WebSocket-мост
+### WebSocket-клиент
 
-`createWS` подключает шину к WebSocket-подобному транспорту. Мост принимает `createSocket`, поэтому одинаково работает с браузерным WebSocket и серверным адаптером.
+`createWebSocket` открывает нативный `WebSocket` по `url` и проксирует каждое событие сокета в шину. Формат провода не предполагается — каждое событие отправляется с фиксированной темой и конвертом, где `parsed` содержит сырую полезную нагрузку.
 
 ```ts
-const ws = createWS({
+const socket = createWebSocket({
+  url,
   bus,
-  createSocket: () => new WebSocket(url),
-  inboundTopics: ['order.created'],
-  outboundTopics: ['slapflow.run.finished'],
-  origin: 'worker',
-  retry: { initialDelay: 500, maxDelay: 10_000, multiplier: 2, jitter: true, maxAttempts: 5 },
+  origin: 'client',
 })
 
-ws.start()
+socket.start()
 ```
 
-Входящие темы проходят через явный список разрешений. Каждая запись может быть точной темой или шаблоном, где `*` соответствует одному сегменту, разделённому точкой. Мост разбирает JSON-конверт и вызывает `bus.dispatch(event)`, сохраняя `id`, `occurredAt`, `origin`, `parsed` и `serialized`; принятые входящие идентификаторы запоминаются и не отправляются обратно наружу. Исходящие темы отправляют полный JSON-конверт события, поэтому удалённый мост может передать его в шину, не создавая новый идентификатор. `maxAttempts` ограничивает reconnect; без него повторы идут бесконечно. `start`, `stop`, `reconnect` и `status` управляют жизненным циклом транспорта. Диагностические события: `slapflow.ws.connecting`, `slapflow.ws.connected`, `slapflow.ws.disconnected`, `slapflow.ws.retrying` и `slapflow.ws.message.rejected`.
+```ts
+bus.on('message', ({ parsed }) => {}) // parsed = сырое сообщение (JSON-декодированное, когда возможно)
+bus.on('open', ({ parsed }) => {}) // { url }
+bus.on('close', ({ parsed }) => {}) // { code, reason }
+bus.on('error', ({ parsed }) => {}) // { error }
+```
+
+События сокета приходят с темой `open`, `message`, `close` или `error`. Полезная нагрузка `message` JSON-декодируется в `parsed`, если валидна, иначе остаётся сырой строкой. Фильтрация тем — забота потребителя: внутри клиента ничего не разрешается и не отклоняется. `reconnect` принимает `initialDelay`, `maxDelay`, `multiplier`, `jitter` и `maxAttempts`; без `maxAttempts` повторы идут бесконечно. `start`, `stop`, `reconnect` и `status` управляют жизненным циклом; статус — одно из `idle`, `connecting`, `connected`, `reconnecting` или `stopped`.
+
+`createWS` помечен как deprecated и будет удалён; мигрируйте на `createWebSocket`.
 
 ## Ограничения безопасности
 
