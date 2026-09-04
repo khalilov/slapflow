@@ -57,7 +57,9 @@
     "test": "npm run typecheck && vitest run",
     "build": "tsup src/index.ts --format esm,cjs --dts --clean",
     "pack:check": "npm pack --dry-run",
-    "prepublishOnly": "npm test && npm run build"
+    "prepublishOnly": "npm test && npm run build",
+    "format": "prettier --write .",
+    "check": "prettier --check ."
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

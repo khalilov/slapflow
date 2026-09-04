@@ -20,7 +20,12 @@ export const validateCondition = (
   const [operator, ...args] = expression
   if (operator === 'guard') {
     if (args.length !== 1 || typeof args[0] !== 'string') {
-      errors.push({ code: 'CONDITION_INVALID', message: 'Guard reference must be a single string name', strategy, path })
+      errors.push({
+        code: 'CONDITION_INVALID',
+        message: 'Guard reference must be a single string name',
+        strategy,
+        path,
+      })
     }
     return
   }

@@ -1,10 +1,4 @@
-import {
-  type ConditionExpression,
-  type ConditionFn,
-  type SlapError,
-  type Input,
-  type Runtime,
-} from '~/types'
+import { type ConditionExpression, type ConditionFn, type SlapError, type Input, type Runtime } from '~/types'
 import { slapError } from '~/helpers/errors/slapError'
 import { resolveValue } from '~/helpers/path/resolveValue'
 import { ResolutionError } from '~/helpers/path/ResolutionError'

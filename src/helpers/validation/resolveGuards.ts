@@ -17,7 +17,9 @@ const resolveRef = (
   path: string
 ): { expression?: ConditionExpression; issue?: GuardIssue } => {
   if (visiting.includes(name)) {
-    return { issue: { code: 'GUARD_CYCLE', message: `Guard "${name}" is part of a reference cycle`, guard: name, path } }
+    return {
+      issue: { code: 'GUARD_CYCLE', message: `Guard "${name}" is part of a reference cycle`, guard: name, path },
+    }
   }
   const guard = config.guards?.[name]
   if (guard === undefined) {
@@ -81,7 +83,12 @@ export const resolveGuards = (config: Config): { config: Config; issues: GuardIs
 
   const resolveNext = (next: NonNullable<Config['strategies'][string]['then']>, prefix: string) =>
     next.map((item, index) => {
-      if (typeof item === 'string' || !item || typeof item !== 'object' || (item as { when?: unknown }).when === undefined) {
+      if (
+        typeof item === 'string' ||
+        !item ||
+        typeof item !== 'object' ||
+        (item as { when?: unknown }).when === undefined
+      ) {
         return item
       }
       const target = item as { strategy: string; props?: Props; when: ConditionExpression }

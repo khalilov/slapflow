@@ -149,12 +149,7 @@ describe('pub/sub', () => {
     bus.emit('hub.team.created', { id: 'c' })
     bus.emit('hub.user.audit.export', { id: 'd' })
 
-    assert.deepEqual(received, [
-      'user:a',
-      'created:a',
-      'user:b',
-      'created:c',
-    ])
+    assert.deepEqual(received, ['user:a', 'created:a', 'user:b', 'created:c'])
   })
 
   it('does not let a wildcard segment cross a dot boundary', () => {

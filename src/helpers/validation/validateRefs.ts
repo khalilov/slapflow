@@ -3,12 +3,7 @@ import { isPathReference } from '~/helpers/path/isPathReference'
 import { isValidPathReference } from '~/helpers/path/isValidPathReference'
 import { parseTemplate } from '~/helpers/path/parseTemplate'
 
-export const validateRefs = (
-  value: unknown,
-  strategy: string,
-  path: string,
-  errors: ValidationIssue[]
-): void => {
+export const validateRefs = (value: unknown, strategy: string, path: string, errors: ValidationIssue[]): void => {
   if (typeof value === 'string') {
     if (isPathReference(value) && !isValidPathReference(value)) {
       errors.push({ code: 'PATH_INVALID', message: `Invalid path reference "${value}"`, strategy, path })
