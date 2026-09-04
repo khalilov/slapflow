@@ -10,14 +10,20 @@ type Events = {
 }
 
 class FakeWebSocket {
+  static OPEN = 1
   static instances: FakeWebSocket[] = []
   readyState = 0
   url = ''
+  sent: string[] = []
   private listeners = new Map<string, EventListener[]>()
 
   constructor(url: string) {
     this.url = url
     FakeWebSocket.instances.push(this)
+  }
+
+  send(data: string): void {
+    this.sent.push(data)
   }
 
   addEventListener(type: string, listener: EventListener): void {
@@ -82,6 +88,39 @@ describe('createWebSocket', () => {
     socket!.message(JSON.stringify({ type: 'colony:state', payload: { ok: true } }))
 
     assert.deepEqual(received, ['open:ws://gateway', { type: 'colony:state', payload: { ok: true } }])
+    ws.stop()
+  })
+
+  it('buffers sends made before the socket opens and flushes them after', () => {
+    const bus = createPubSub<Events>()
+    const ws = createWebSocket<Events>({ url: 'ws://gateway', bus })
+
+    ws.start()
+    const socket = FakeWebSocket.instances[0]
+
+    ws.send(JSON.stringify({ type: 'command:send', payload: { id: 1 } }))
+    ws.send(JSON.stringify({ type: 'command:send', payload: { id: 2 } }))
+    assert.deepEqual(socket!.sent, [])
+
+    socket!.open()
+    assert.deepEqual(socket!.sent, [
+      JSON.stringify({ type: 'command:send', payload: { id: 1 } }),
+      JSON.stringify({ type: 'command:send', payload: { id: 2 } }),
+    ])
+    ws.stop()
+  })
+
+  it('sends data immediately once connected', () => {
+    const bus = createPubSub<Events>()
+    const ws = createWebSocket<Events>({ url: 'ws://gateway', bus })
+
+    ws.start()
+    const socket = FakeWebSocket.instances[0]
+    socket!.open()
+
+    ws.send(JSON.stringify({ type: 'command:send', payload: { id: 1 } }))
+
+    assert.deepEqual(socket!.sent, [JSON.stringify({ type: 'command:send', payload: { id: 1 } })])
     ws.stop()
   })
 

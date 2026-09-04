@@ -202,6 +202,7 @@ export type WSClient = {
   stop(): void
   reconnect(): void
   status(): WebSocketStatus
+  send(data: string): void
 }
 
 export type BindingEventMap = Record<string, Input>

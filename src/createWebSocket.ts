@@ -7,126 +7,159 @@ import {
 } from '~/types'
 import { getRetryDelay } from '~/helpers/retry/getRetryDelay'
 import { createId } from '~/helpers/ids/createId'
+import { serializeError } from '~/helpers/pubSub/serializeError'
+import { parsePayload } from '~/helpers/parsePayload'
 
-export const createWebSocket = <TEvents extends object = EventMap>(options: WebSocketOptions<TEvents>): WSClient => {
-  let socket: WebSocket | undefined
-  let retryTimer: ReturnType<typeof setTimeout> | undefined
-  let retryAttempt = 0
-  let started = false
-  let currentStatus: WebSocketStatus = 'idle'
+class WebSocketConnection<TEvents extends object = EventMap> implements WSClient {
+  private _socket: WebSocket | undefined
+  private _retryTimer: ReturnType<typeof setTimeout> | undefined
+  private _retryAttempt = 0
+  private _queue: string[] = []
+  private _started = false
+  private _status: WebSocketStatus = 'idle'
 
-  const emitSocketEvent = (topic: SocketEventTopic, payload: unknown): void => {
-    options.bus.dispatch({
-      id: createId(),
-      topic,
-      occurredAt: Date.now(),
-      ...(options.origin ? { origin: options.origin } : {}),
-      parsed: payload,
-      serialized: JSON.stringify(payload),
-    })
+  constructor(private readonly options: WebSocketOptions<TEvents>) {}
+
+  start(): void {
+    if (!this._started) {
+      this._started = true
+      this.connect()
+    }
   }
 
-  const scheduleRetry = (): void => {
-    const delay = getRetryDelay(retryAttempt, options.reconnect ?? {})
-    const attempt = retryAttempt + 1
+  stop(): void {
+    this._started = false
+    this.clearTimer()
+    this.clearQueue()
+    const current = this._socket
+    this._socket = undefined
+    current?.close()
 
-    currentStatus = 'reconnecting'
-    retryAttempt = attempt
-    retryTimer = setTimeout(() => {
-      retryTimer = undefined
-      connect()
-    }, delay)
+    this.setStatus('stopped')
   }
 
-  const connect = (): void => {
-    if (!started || socket) {
+  reconnect(): void {
+    if (this._started) {
+      this.clearTimer()
+      const current = this._socket
+      this._socket = undefined
+      current?.close()
+      this.connect()
+    }
+  }
+
+  status(): WebSocketStatus {
+    return this._status
+  }
+
+  send(data: string): void {
+    if (this._socket?.readyState === WebSocket.OPEN) {
+      this._socket.send(data)
+    } else {
+      this._queue.push(data)
+    }
+  }
+
+  private connect(): void {
+    if (!this._started || this._socket) {
       return
     }
 
-    currentStatus = 'connecting'
+    const { url, protocols } = this.options
+    const current = new WebSocket(url, protocols ?? [])
 
-    try {
-      const current = new WebSocket(options.url, options.protocols ?? [])
-      socket = current
+    this._socket = current
 
-      current.addEventListener('open', () => {
-        if (socket === current) {
-          retryAttempt = 0
-          currentStatus = 'connected'
-          emitSocketEvent('open', { url: options.url })
-        }
-      })
+    this.setStatus('connecting')
 
-      current.addEventListener('message', (event) => {
-        if (socket !== current) {
-          return
-        }
-        let parsed: unknown = (event as MessageEvent).data
-        if (typeof parsed === 'string') {
-          try {
-            parsed = JSON.parse(parsed)
-          } catch {
-            parsed = (event as MessageEvent).data
-          }
-        }
-        emitSocketEvent('message', parsed)
-      })
+    current.addEventListener('open', () => this.onOpen(current))
+    current.addEventListener('message', (event) => this.onMessage(current, event))
+    current.addEventListener('close', (event) => this.onClose(current, event))
+    current.addEventListener('error', (event) => this.onError(current, event))
+  }
 
-      current.addEventListener('close', (event) => {
-        if (socket !== current) {
-          return
-        }
-        socket = undefined
-        emitSocketEvent('close', { code: (event as CloseEvent).code, reason: (event as CloseEvent).reason })
-        if (started) {
-          scheduleRetry()
-        }
-      })
+  private onOpen(current: WebSocket): void {
+    if (this._socket === current) {
+      this._retryAttempt = 0
+      this.setStatus('connected')
+      this.flush()
+      this.dispatch('open', { url: this.options.url })
+    }
+  }
 
-      current.addEventListener('error', (event) => {
-        emitSocketEvent('error', { error: event })
-      })
-    } catch (error) {
-      socket = undefined
-      emitSocketEvent('error', { error })
-      if (started) {
-        scheduleRetry()
+  private onMessage(current: WebSocket, event: Event): void {
+    if (this._socket === current) {
+      this.dispatch('message', parsePayload((event as MessageEvent).data))
+    }
+  }
+
+  private onClose(current: WebSocket, event: Event): void {
+    if (this._socket === current) {
+      this._socket = undefined
+      this.dispatch('close', event)
+      if (this._started) {
+        this.retry()
       }
     }
   }
 
-  const start = (): void => {
-    if (!started) {
-      started = true
-      connect()
+  private onError(current: WebSocket, event: Event): void {
+    if (this._socket === current) {
+      this.dispatch('error', serializeError((event as ErrorEvent).error))
     }
   }
 
-  const stop = (): void => {
-    started = false
-    if (retryTimer) {
-      clearTimeout(retryTimer)
-    }
-    retryTimer = undefined
-    const current = socket
-    socket = undefined
-    current?.close()
-    currentStatus = 'stopped'
+  private dispatch(topic: SocketEventTopic, parsed: unknown): void {
+    const { bus, origin } = this.options
+
+    bus.dispatch({
+      id: createId(),
+      topic,
+      occurredAt: Date.now(),
+      ...(origin ? { origin } : {}),
+      parsed,
+      serialized: JSON.stringify(parsed),
+    })
   }
 
-  const reconnect = (): void => {
-    if (!started) {
-      return
+  private flush(): void {
+    if (this._socket && this._socket.readyState === WebSocket.OPEN) {
+      for (const message of this._queue) {
+        this._socket.send(message)
+      }
+
+      this.clearQueue()
     }
-    if (retryTimer) {
-      clearTimeout(retryTimer)
-      retryTimer = undefined
-    }
-    const current = socket
-    socket = undefined
-    current?.close()
-    connect()
   }
 
-  return { start, stop, reconnect, status: () => currentStatus }
+  private retry(): void {
+    this.setStatus('reconnecting')
+    this._retryTimer = setTimeout(
+      () => {
+        this._retryTimer = undefined
+        this.connect()
+      },
+      getRetryDelay(this._retryAttempt, this.options.reconnect ?? {})
+    )
+    this._retryAttempt = this._retryAttempt + 1
+  }
+
+  private setStatus(status: WebSocketStatus): void {
+    this._status = status || 'idle'
+  }
+
+  private clearQueue(): void {
+    this._queue = []
+  }
+
+  private clearTimer(): void {
+    if (this._retryTimer) {
+      clearTimeout(this._retryTimer)
+    }
+
+    this._retryTimer = undefined
+  }
 }
+
+export const createWebSocket = <TEvents extends object = EventMap>(options: WebSocketOptions<TEvents>): WSClient =>
+  new WebSocketConnection<TEvents>(options)
