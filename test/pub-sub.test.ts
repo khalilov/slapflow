@@ -131,6 +131,24 @@ describe('pub/sub', () => {
     assert.deepEqual(received, [event])
   })
 
+  it('treats a bare * as a catch-all for every topic', () => {
+    type HubEvents = {
+      'editor.command': { name: string }
+      'user.created': { id: string }
+      'a.b.c': { id: string }
+    }
+    const bus = createPubSub<HubEvents>()
+    const received: string[] = []
+
+    bus.on('*', (e) => received.push(e.topic))
+
+    bus.emit('editor.command', { name: 'x' })
+    bus.emit('user.created', { id: 'a' })
+    bus.emit('a.b.c', { id: 'b' })
+
+    assert.deepEqual(received, ['editor.command', 'user.created', 'a.b.c'])
+  })
+
   it('matches wildcard subscriptions segment by segment', () => {
     type HubEvents = {
       'hub.user.created': { id: string }

@@ -1,4 +1,8 @@
 export const matchesTopic = (topic: string, pattern: string): boolean => {
+  if (pattern === '*') {
+    return true
+  }
+
   if (!pattern.includes('*')) {
     return topic === pattern
   }
