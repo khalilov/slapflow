@@ -1,14 +1,14 @@
 {
   "name": "slapflow",
   "version": "1.2.2",
-  "description": "Chain actions behavior runtime",
+  "description": "Declarative orchestration runtime for strategy graphs",
   "license": "ISC",
-  "author": "Sergey Khalilov",
+  "author": "Sergey Khalilov <sergey.khalilov@gmail.com>",
   "keywords": [
-    "behavior",
-    "workflow",
+    "declarative",
     "orchestration",
-    "state-machine",
+    "strategy",
+    "graph",
     "event-driven",
     "concurrency",
     "cancellation",
@@ -16,7 +16,6 @@
     "fetch",
     "websocket",
     "action-runner",
-    "rules-engine",
     "typescript"
   ],
   "repository": {
@@ -46,6 +45,7 @@
     "SPEC.md",
     "SPEC-RU.md",
     "RUNTIME-FLOW.mmd",
+    "skills",
     "!dist/**/*.js.map",
     "!dist/**/*.d.ts.map"
   ],

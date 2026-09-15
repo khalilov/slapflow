@@ -180,3 +180,31 @@ npm test
 npm run build
 npm run pack:check
 ```
+
+## Навык для агентов
+
+Пакет содержит `SKILL.md` в `skills/slapflow/`. Укажите агенту на **папку**, а не на файл `SKILL.md`.
+
+| Инструмент | Расположение | Установка |
+| --- | --- | --- |
+| opencode | `opencode.json` → `skills.paths` | конфиг |
+| Claude Code | `~/.claude/skills/` (личный) или `.claude/skills/` (проект) | symlink |
+| Codex | `~/.agents/skills/` (пользователь) или `.agents/skills/` (репо) | symlink |
+
+opencode — добавьте путь к пакету в `opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "skills": { "paths": ["node_modules/slapflow/skills"] }
+}
+```
+
+Claude Code и Codex — создайте symlink на папку (`.agents/skills` также обслуживает другие Agent Skills клиенты):
+
+```sh
+ln -sfn "$PWD/node_modules/slapflow/skills/slapflow" ~/.agents/skills/slapflow
+ln -sfn "$PWD/node_modules/slapflow/skills/slapflow" ~/.claude/skills/slapflow
+```
+
+Перезапустите opencode и Codex после установки; Claude Code подхватит новые навыки после перезапуска и начнёт отслеживать изменения. Повторите symlink при переустановке пакета.

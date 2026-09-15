@@ -180,3 +180,35 @@ npm test
 npm run build
 npm run pack:check
 ```
+
+## Agent skill
+
+The package ships a `SKILL.md` skill in `skills/slapflow/`. Point your agent at it —
+symlink the **folder**, not the `SKILL.md` file.
+
+| Tool | Location | Install |
+| --- | --- | --- |
+| opencode | `opencode.json` → `skills.paths` | config |
+| Claude Code | `~/.claude/skills/` (personal) or `.claude/skills/` (project) | symlink |
+| Codex | `~/.agents/skills/` (user) or `.agents/skills/` (repo) | symlink |
+
+opencode — add the packaged path to `opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "skills": { "paths": ["node_modules/slapflow/skills"] }
+}
+```
+
+Claude Code and Codex — symlink the folder (`.agents/skills` also serves other
+Agent Skills clients):
+
+```sh
+ln -sfn "$PWD/node_modules/slapflow/skills/slapflow" ~/.agents/skills/slapflow
+ln -sfn "$PWD/node_modules/slapflow/skills/slapflow" ~/.claude/skills/slapflow
+```
+
+Restart opencode and Codex after installing; Claude Code picks up new skills
+after a restart too, then watches them live. Re-run the symlink if you reinstall
+the package.

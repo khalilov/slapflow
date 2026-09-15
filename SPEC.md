@@ -282,6 +282,123 @@ type Runtime = {
 
 Runtime path get/set is implemented directly through `objwalk`.
 
+## Expressions
+
+`$expression` evaluates a computation at resolution time. It appears wherever `resolveValue` runs: condition arguments, strategy `props`, `core.set` values, and action return values.
+
+```ts
+{ $expression: [operator, ...args] }
+```
+
+Args are recursively resolved before the operator runs, so `$context.*`, `$data.*`, `$input.*`, `$variables.*`, nested `$expression`, and `$template` all work inside.
+
+### Built-in operators
+
+**Math**
+
+| Operator | Args | Result |
+|----------|------|--------|
+| `add` | 2+ numbers | sum |
+| `subtract` | 2 numbers | a − b |
+| `multiply` | 2+ numbers | product |
+| `divide` | 2 numbers | a / b (throws on b = 0) |
+| `modulo` | 2 numbers | a % b (throws on b = 0) |
+| `min` | 1+ numbers | smallest |
+| `max` | 1+ numbers | largest |
+| `abs` | 1 number | \|n\| |
+| `round` | 1 number | nearest integer |
+| `floor` | 1 number | floor(n) |
+| `ceil` | 1 number | ceil(n) |
+| `clamp` | 3 numbers | min(max(value, min), max) |
+
+**Access**
+
+| Operator | Args | Result |
+|----------|------|--------|
+| `at` | array, non-negative integer | element at index |
+| `property` | object, string key | dynamic property access |
+| `get` | object, path string | nested path access via `objwalk` |
+
+**String**
+
+| Operator | Args | Result |
+|----------|------|--------|
+| `concat` | 2+ string-compatible primitives | concatenated string |
+
+### Custom operators
+
+Register via `expressions` in runner options. The operator receives resolved args as `unknown[]`:
+
+```ts
+const flow = createFlow(
+  { config, actions, conditions },
+  {
+    context: () => state,
+    bus,
+    expressions: {
+      calculateTax: ([amount, rate]) => (amount as number) * (rate as number),
+    },
+  }
+)
+```
+
+Usage in config:
+
+```ts
+{ $expression: ['calculateTax', '$input.amount', '$variables.TAX_RATE'] }
+```
+
+### Examples
+
+**Dynamic property access** — read a context field whose key comes from data:
+
+```ts
+['eq', { $expression: ['property', '$context.character', '$data.characterType'] }, 'warrior']
+```
+
+**Array element** — pick an item by runtime index:
+
+```ts
+{ $expression: ['at', '$variables.CONTRACTS', '$input.index'] }
+```
+
+**Nested path** — traverse a deep structure with a string path:
+
+```ts
+{ $expression: ['get', '$data.response', 'items[0].price'] }
+```
+
+**Math in a condition** — compare a computed value:
+
+```ts
+['gt', { $expression: ['subtract', '$context.balance', '$input.amount'] }, 0]
+```
+
+**String interpolation** — build a message from parts:
+
+```ts
+{ $expression: ['concat', 'Order #', '$input.orderId', ' confirmed'] }
+```
+
+**Chained expressions** — nested operators resolve inside-out:
+
+```ts
+{
+  $expression: [
+    'concat',
+    'Tax: $',
+    { $expression: ['multiply', '$input.amount', '$variables.TAX_RATE'] },
+  ]
+}
+```
+
+### Error codes
+
+- `EXPRESSION_INVALID_ARGUMENT` — wrong arg count or type
+- `EXPRESSION_DIVISION_BY_ZERO` — divide/modulo by zero
+- `EXPRESSION_OPERATOR_NOT_FOUND` — unknown operator (not built-in or custom)
+- `EXPRESSION_PATH_NOT_FOUND` — `at` index out of bounds or `get`/`property` path not found
+
 ## Guards
 
 Reusable `when` expressions live in the `guards` map on `Config` and are referenced from a strategy's `when` (or a `then`/`catch` step's `when`) with the `['guard', name]` node:
