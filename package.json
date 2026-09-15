@@ -1,6 +1,6 @@
 {
   "name": "slapflow",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Declarative orchestration runtime for strategy graphs",
   "license": "ISC",
   "author": "Sergey Khalilov <sergey.khalilov@gmail.com>",
