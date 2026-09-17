@@ -15,6 +15,7 @@ import { pushTrace } from '~/helpers/runner/pushTrace'
 import { resolveValue } from '~/helpers/path/resolveValue'
 import { withErrorStage } from '~/helpers/errors/withErrorStage'
 import { ResolutionError } from '~/helpers/path/ResolutionError'
+import { EnqueueError } from '~/helpers/errors/EnqueueError'
 import { redactVariableProps } from '~/helpers/trace/redactVariableProps'
 import { toRuntimeResult } from '~/helpers/runner/toRuntimeResult'
 import { isTimedOut } from '~/helpers/runner/isTimedOut'
@@ -157,7 +158,7 @@ export const executeStrategy = <TContext, TPatch>(
     }
 
     return handleFailure(
-      cause instanceof ResolutionError
+      cause instanceof ResolutionError || cause instanceof EnqueueError
         ? withErrorStage(cause.slapError, {
             phase: 'action',
             strategy: id,

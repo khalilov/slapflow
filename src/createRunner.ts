@@ -3,6 +3,7 @@ import {
   type ConditionFn,
   type Config,
   type Input,
+  type PoolScheduler,
   type RunResult,
   type Runner,
   type RunOptions,
@@ -10,48 +11,47 @@ import {
   type ValidationResult,
 } from '~/types'
 import { SyncAsyncError } from '~/helpers/errors/syncAsyncError'
-import { BUILTIN_ACTION_NAMES, BUILTIN_ACTIONS, type ActionsRegistry } from '~/helpers/actions'
-import { BUILTIN_CONDITION_NAMES, BUILTIN_CONDITIONS, type ConditionsRegistry } from '~/helpers/conditions'
+import { BUILTIN_ACTIONS } from '~/helpers/actions'
+import { BUILTIN_CONDITIONS } from '~/helpers/conditions'
 import { createMemoryTraceSink } from '~/helpers/trace/createMemoryTraceSink'
-import { executeStrategy } from '~/helpers/runner/executeStrategy'
-import { finishRunResult } from '~/helpers/runner/finishRunResult'
 import { slapError } from '~/helpers/errors/slapError'
 import { isPromiseLike } from '~/helpers/runner/isPromiseLike'
-import { resolveEntrypoint } from '~/helpers/runner/resolveEntrypoint'
 import { runnerLimitWarnings } from '~/helpers/validation/runnerLimitWarnings'
 import { type Normalized, type RunnerEnvironment, type RunState } from '~/helpers/runner/runnerTypes'
 import { validateConfig as validateRawConfig } from '~/helpers/validation/validateConfig'
 import { resolveGuards } from '~/helpers/validation/resolveGuards'
 import { cloneRuntimeVariables } from '~/helpers/runner/cloneRuntimeVariables'
 import { createRunCancellation } from '~/helpers/runner/createRunCancellation'
+import { createRunState } from '~/helpers/runner/createRunState'
+import { createReservedRegistry } from '~/helpers/registry/createReservedRegistry'
+import { executeRun } from '~/helpers/runner/executeRun'
+import { finishRun } from '~/helpers/runner/finishRun'
+import { normalizeRunnerOptions } from '~/helpers/runner/normalizeRunnerOptions'
+import { reportRunError } from '~/helpers/runner/reportRunError'
 
 export const createRunner = <TContext, TPatch = unknown>(
-  options: RunnerOptions<TContext, TPatch> = {}
+  options: RunnerOptions<TContext, TPatch> = {},
+  schedulerRef?: { current?: PoolScheduler }
 ): Runner<TContext, TPatch> => {
-  const actionsRegistry = new Map(BUILTIN_ACTIONS) as ActionsRegistry<TContext, TPatch>
-  const conditionsRegistry = new Map(BUILTIN_CONDITIONS) as ConditionsRegistry<TContext>
+  const runnerOptions = normalizeRunnerOptions(options)
+  const actions = createReservedRegistry(BUILTIN_ACTIONS as readonly [string, Action<TContext, TPatch>][], 'action')
+  const conditions = createReservedRegistry(
+    BUILTIN_CONDITIONS as readonly [string, ConditionFn<TContext>][],
+    'condition'
+  )
   const configRef: { current?: Config } = {}
-  const timeout = options.timeout ?? options.timeoutMs
-  const runnerOptions = timeout === undefined ? options : { ...options, timeout }
   const mergeData = options.mergeData ?? ((current, next) => ({ ...current, ...next }))
   const variables = cloneRuntimeVariables(options.variables ?? {})
 
-  if (options.timeoutMs !== undefined) {
-    console.warn('timeoutMs is deprecated; use timeout. It will be removed in a future major release.')
-  }
-
   const environment: RunnerEnvironment<TContext, TPatch> = {
-    registry: { actions: actionsRegistry, conditions: conditionsRegistry },
+    registry: { actions: actions.registry, conditions: conditions.registry },
     configRef,
     options: runnerOptions,
     mergeData,
   }
 
   const registerAction = (name: string, action: Action<TContext, TPatch>): void => {
-    if (BUILTIN_ACTION_NAMES.has(name)) {
-      throw new Error(`Cannot override built-in action "${name}"`)
-    }
-    actionsRegistry.set(name, action)
+    actions.register(name, action)
   }
 
   const registerActions = (items: Record<string, Action<TContext, TPatch>>): void => {
@@ -59,10 +59,7 @@ export const createRunner = <TContext, TPatch = unknown>(
   }
 
   const registerCondition = (name: string, condition: ConditionFn<TContext>): void => {
-    if (BUILTIN_CONDITION_NAMES.has(name)) {
-      throw new Error(`Cannot override built-in condition "${name}"`)
-    }
-    conditionsRegistry.set(name, condition)
+    conditions.register(name, condition)
   }
 
   const registerConditions = (items: Record<string, ConditionFn<TContext>>): void => {
@@ -70,7 +67,7 @@ export const createRunner = <TContext, TPatch = unknown>(
   }
 
   const validateConfig = (target = configRef.current): ValidationResult => {
-    const result = validateRawConfig(target, actionsRegistry, conditionsRegistry)
+    const result = validateRawConfig(target, actions.registry, conditions.registry)
     return { ...result, warnings: [...result.warnings, ...runnerLimitWarnings(runnerOptions)] }
   }
 
@@ -88,58 +85,23 @@ export const createRunner = <TContext, TPatch = unknown>(
   ): RunResult<TContext, TPatch> | Promise<RunResult<TContext, TPatch>> => {
     const traceSink = options.trace === true ? createMemoryTraceSink() : options.trace || undefined
     const cancellation = createRunCancellation(runOptions.signal)
-    const state: RunState<TContext, TPatch> = {
+    const state: RunState<TContext, TPatch> = createRunState<TContext, TPatch>({
       context,
       input,
-      data: {},
-      patches: [],
-      events: [],
-      stepCounter: { current: 0 },
-      startedAt: Date.now(),
       sync,
-      signal: cancellation.controller.signal,
-      abort: () => cancellation.controller.abort(),
-      closed: false,
-      reportedErrors: [],
       variables,
       expressions: options.expressions ?? {},
-      ...(traceSink ? { traceSink } : {}),
+      cancellation,
+      scheduler: schedulerRef?.current,
+      pool: runOptions.pool,
+      binding: runOptions.binding,
+      traceSink,
+    })
+    const done = (result: Normalized<TContext, TPatch>): RunResult<TContext, TPatch> => {
+      reportRunError(result, state, traceSink, options.onError)
+      return finishRun(result, state, cancellation, traceSink)
     }
-
-    const reportError = (result: Normalized<TContext, TPatch>): void => {
-      if (result.status !== 'failed' || state.reportedErrors.includes(result.error)) {
-        return
-      }
-      state.reportedErrors.push(result.error)
-      options.onError?.({
-        error: result.error,
-        context: state.context,
-        input: state.input,
-        data: state.data,
-        patches: state.patches,
-        events: state.events,
-        ...(traceSink?.entries ? { trace: traceSink.entries() } : {}),
-      })
-    }
-    const finish = (result: Normalized<TContext, TPatch>): RunResult<TContext, TPatch> => {
-      state.closed = true
-      cancellation.dispose()
-
-      return finishRunResult(result, state, traceSink || undefined)
-    }
-    const start = resolveEntrypoint(entrypoint, environment)
-
-    if ('error' in start) {
-      const result: Normalized<TContext, TPatch> = { status: 'failed', error: start.error, patches: [], events: [] }
-      reportError(result)
-      return finish(result)
-    }
-
-    const executed = executeStrategy(start.id, {}, 0, state, environment)
-    const done = (result: Normalized<TContext, TPatch>) => {
-      reportError(result)
-      return finish(result)
-    }
+    const executed = executeRun(entrypoint, state, environment)
 
     return isPromiseLike(executed) ? executed.then(done) : done(executed)
   }

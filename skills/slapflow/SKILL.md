@@ -19,6 +19,8 @@ import {
   BUILTIN_CONDITIONS,
   defineErrorReporter,
   catchError,
+  EnqueueError,
+  PoolError,
   type Config,
   type Strategy,
   type Runtime,
@@ -140,7 +142,7 @@ const result = await flow.runner.run('worker.tick', context, input)
 
 ## Concurrency
 
-Each binding supports four modes. Default is `parallel`.
+Each binding supports five modes. Default is `parallel`.
 
 | Mode       | Behaviour |
 |------------|-----------|
@@ -148,6 +150,7 @@ Each binding supports four modes. Default is `parallel`.
 | `latest`   | aborts the previous run in the same lane, starts a new one |
 | `queue`    | queues up to `maxQueueSize` (default 50), runs FIFO |
 | `drop`     | ignores the event if a run is already active in the lane |
+| `workers`  | keyed worker pool: max `workers` runs, same key serialized FIFO, work-conserving across keys |
 
 ```ts
 const flow = createFlow<Context, Patch, Events>(
@@ -157,6 +160,27 @@ const flow = createFlow<Context, Patch, Events>(
 ```
 
 `key(payload)` creates independent lanes — concurrency applies within one lane. `latest` uses `runtime.signal` (AbortSignal) so actions can cooperatively cancel. On `queue` overflow: bus publishes `slapflow.queue.overflow` and `slapflow.run.dropped`.
+
+`workers` uses a shared pool instead of per-binding lanes. Configure pools (and telemetry) in `FlowOptions`:
+
+```ts
+const flow = createFlow<Context, Patch, Events>(
+  {
+    config, actions, conditions,
+    events: {
+      '[bus] colony.observed': {
+        entrypoint: 'colony.observed',
+        options: { concurrency: { mode: 'workers', pool: 'colony', key: '$input.colonyId' } },
+      },
+    },
+  },
+  { context: () => store.getState(), bus, pools: { colony: { workers: 4, maxQueueSize: 2000, overflow: 'wait' } } }
+)
+```
+
+`key` accepts a function, a `$input.<path>` string, or `{ $expression }`; bare strings and other roots are rejected at `start()`. A binding whose key resolves to a non-string drops the event (`slapflow.run.dropped`, reason `key-invalid`); `runtime.enqueue` reports `ENQUEUE_KEY_INVALID`. A binding without `key` uses one implicit line. `workers` defaults to `overflow: 'wait'`, `maxQueueSize: Infinity`. `coalesce` replaces a not-started task with the same token in the same line.
+
+Inside an action, `runtime.enqueue(entrypoint, input, { pool, key?, coalesceToken? })` fans work into a named pool; it resolves on acceptance. A task cannot enqueue into its own pool (`ENQUEUE_SELF_POOL`) — producers must run outside the pool they feed. Failures throw `EnqueueError` (exported), mapped by the runner to a controlled `fail`. `flow.poolStats('colony')` reports `active`/`queued`/`oldestQueuedMs`; `flow.drain({ timeoutMs })` waits for pools and binding lanes to empty.
 
 `flow.stop({ force: true })` aborts **every** active run. Normal `stop()` removes bindings but does not cancel running actions.
 
@@ -191,8 +215,13 @@ Published through the configured bus:
 | `slapflow.run.finished` | run result |
 | `slapflow.run.failed` | error + result |
 | `slapflow.run.cancelled` | aborted run |
-| `slapflow.run.dropped` | dropped by `latest`/`drop` |
+| `slapflow.run.dropped` | dropped by `latest`/`drop`, queue overflow, or reset |
 | `slapflow.queue.overflow` | queue full |
+| `slapflow.task.queued` | pool task accepted |
+| `slapflow.task.started` | pool task dispatched (`waitMs`) |
+| `slapflow.task.finished` | pool task done (`durationMs`, `status`) |
+
+For pooled runs, `pools[pool].events` gates `task.*` and `run.started`/`run.finished` (`'off'` by default). `run.failed`/`run.cancelled` and `queue.overflow` are always published.
 
 ```ts
 bus.on('slapflow.run.failed', ({ parsed }) => {
@@ -257,6 +286,7 @@ runtime.stop(reason?)          // return ActionStop
 runtime.fail(reason?, data?)   // return ActionFail
 runtime.executeThen()          // run this strategy's `then` branch
 runtime.executeCatch()         // run this strategy's `catch` branch
+runtime.enqueue(entrypoint, input, { pool, key?, coalesceToken? }) // place a run into a named pool (when pools configured)
 ```
 
 ## Guards

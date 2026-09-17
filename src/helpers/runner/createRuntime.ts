@@ -1,6 +1,7 @@
 import { pick, set } from 'objwalk'
-import { type Runtime, type RuntimeBranchResult } from '~/types'
+import { type EnqueueOptions, type Input, type Runtime, type RuntimeBranchResult } from '~/types'
 import { type RunState } from '~/helpers/runner/runnerTypes'
+import { EnqueueError } from '~/helpers/errors/EnqueueError'
 import { resolveValue } from '~/helpers/path/resolveValue'
 import { stopResult } from '~/helpers/runner/stopResult'
 import { protectedPickOptions } from '~/helpers/path/protectedPickOptions'
@@ -25,6 +26,25 @@ export const createRuntime = <TContext, TPatch>(
       }
     },
   }
+  const scheduler = state.scheduler
+  const currentPool = state.pool
+  const enqueue = scheduler
+    ? async (entrypoint: string, input: Input, options: EnqueueOptions): Promise<void> => {
+        if (currentPool !== undefined && currentPool === options.pool) {
+          throw new EnqueueError(
+            'ENQUEUE_SELF_POOL',
+            `Run inside pool "${options.pool}" cannot enqueue into the same pool`
+          )
+        }
+        await scheduler.enqueue({
+          pool: options.pool,
+          entrypoint,
+          input,
+          key: options.key ?? '',
+          ...(options.coalesceToken === undefined ? {} : { coalesceToken: options.coalesceToken }),
+        })
+      }
+    : undefined
 
   return {
     get: (path) => pick(state.context as Record<string, unknown>, path),
@@ -66,5 +86,6 @@ export const createRuntime = <TContext, TPatch>(
       ...(reason ? { reason } : {}),
       ...(failureData ? { data: failureData } : {}),
     }),
+    ...(enqueue ? { enqueue } : {}),
   }
 }

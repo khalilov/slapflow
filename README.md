@@ -11,7 +11,7 @@ Slapflow takes care of orchestration, concurrency, cancellation, and diagnostics
 
 - **Keep the business flow visible.** Put a scenario in one chain instead of hiding it among UI handlers, transport callbacks, and service code.
 - **Test the scenario without the surrounding application.** Pass in context and events; actions and conditions are just TypeScript functions.
-- **Make async behavior deliberate.** Choose `parallel`, `latest`, `queue`, or `drop` for each event source. Actions receive an `AbortSignal` when cancellation matters.
+- **Make async behavior deliberate.** Choose `parallel`, `latest`, `queue`, `drop`, or `workers` for each event source. Actions receive an `AbortSignal` when cancellation matters.
 - **Use the same flow in more than one place.** The chain can start from a typed bus, DOM event, API callback, timer, worker, or WebSocket message.
 
 ### When to use Slapflow
@@ -156,12 +156,48 @@ const config = {
 }
 ```
 
+## Fan out work through a keyed pool
+
+A `workers` binding runs tasks through a shared pool: at most `workers` runs at once, tasks with the same line key run in FIFO order and never in parallel, and different keys run concurrently. An action fans work into a named pool with `runtime.enqueue`:
+
+```ts
+const flow = createFlow<Context, Patch, Events>(
+  {
+    config,
+    actions: {
+      'world.tick': async ({ input, runtime }) => {
+        for (const colonyId of Object.keys(context.colonies)) {
+          await runtime.enqueue('colony.tick', { tick: input.tick, colonyId }, { pool: 'colony', key: colonyId })
+        }
+      },
+    },
+    events: {
+      // dispatcher runs outside the pool it feeds
+      '[bus] game.tick': { entrypoint: 'world.tick', options: { concurrency: { mode: 'parallel' } } },
+      '[bus] colony.observed': {
+        entrypoint: 'colony.observed',
+        options: { concurrency: { mode: 'workers', pool: 'colony', key: '$input.colonyId' } },
+      },
+    },
+  },
+  {
+    context: () => store.getState(),
+    bus,
+    pools: { colony: { workers: 4, maxQueueSize: 2_000, overflow: 'wait' } },
+  }
+)
+```
+
+`overflow: 'wait'` applies backpressure instead of dropping accepted work. A task cannot enqueue into its own pool (`ENQUEUE_SELF_POOL`), so the fan-out dispatcher runs outside `colony`. `flow.poolStats('colony')` reports `active`/`queued`/`oldestQueuedMs`, and `flow.drain({ timeoutMs })` waits for pools and binding lanes to empty on shutdown.
+
+The pool is in-process and in-memory: it bounds concurrency and preserves per-key order, but it is not durable storage.
+
 ## What Slapflow provides
 
 - Declarative strategies, conditions, error branches, and entrypoints.
 - A broad set of [built-in conditions](SPEC.md#built-in-conditions) for comparisons, type checks, collections, and compound logic.
 - Typed PubSub bindings and delegated DOM bindings.
-- `parallel`, `latest`, `queue`, and `drop` concurrency modes with per-entity lanes.
+- `parallel`, `latest`, `queue`, and `drop` concurrency modes with per-entity lanes, plus a keyed `workers` pool with named pools, backpressure, and `runtime.enqueue` fan-out.
 - A native WebSocket client that proxies socket events into the bus.
 - `core.fetch` with response parsing, cancellation, and retry backoff.
 - Normalized results, execution trace, validation, and lifecycle diagnostics such as `slapflow.run.started` and `slapflow.run.failed`.

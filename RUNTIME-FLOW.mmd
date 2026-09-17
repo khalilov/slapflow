@@ -7,11 +7,14 @@ flowchart LR
   WS --> TRANSPORT
   BUS --> Slapflow
 
-  Slapflow --> CONCURRENCY["Concurrency lane"]
+  Slapflow --> CONCURRENCY["Concurrency lanes / worker pools"]
   CONCURRENCY --> RUNNER["Behavior runner"]
   RUNNER --> CONDITIONS["Conditions"]
   CONDITIONS --> ACTIONS["Actions"]
   ACTIONS --> RESULT["Run result"]
+
+  ACTIONS --> POOL["runtime.enqueue fan-out"]
+  POOL --> CONCURRENCY
 
   RUNNER --> DIAGNOSTICS["slapflow.* diagnostics"]
   DIAGNOSTICS --> BUS

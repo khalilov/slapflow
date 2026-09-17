@@ -21,6 +21,8 @@ import {
   createFlow,
   createWebSocket,
   catchError,
+  EnqueueError,
+  PoolError,
 } from 'slapflow'
 ```
 
@@ -271,6 +273,7 @@ type Runtime = {
   patch(patch: unknown): void
   stop(reason?: string): ActionStop<unknown>
   fail(reason?: string, data?: Record<string, unknown>): ActionFail
+  enqueue?(entrypoint: string, input: Input, options: EnqueueOptions): Promise<void>
 }
 ```
 
@@ -281,6 +284,8 @@ type Runtime = {
 `runtime.variables.get` читает неизменяемые runtime-переменные. `runtime.resolve` разрешает ссылки `$context.*`, `$data.*`, `$input.*` и неизменяемые значения `$variables.*`. Он также рекурсивно вычисляет объекты `$expression` и `$template`, используя операторы выражений, зарегистрированные в опциях runner. В `$template` для совместимости `{{ path }}` читает runtime data; `{{ data.path }}`, `{{ context.path }}` и `{{ input.path }}` явно выбирают источник.
 
 Чтение и запись путей во время выполнения реализованы непосредственно через `objwalk`.
+
+`runtime.enqueue` доступен только когда `createFlow` сконфигурирован с `pools`/`workers`; иначе метод отсутствует. Он ставит запуск в именованный пул и резолвится в момент приёма задачи (не по её завершении). `options.pool` обязателен; `options.key` — уже вычисленный ключ линии (без резолва путей); `options.coalesceToken` помечает заменяемый сигнал. Ошибки постановки бросают `EnqueueError` с `slapError.code`: `ENQUEUE_UNKNOWN_POOL`, `ENQUEUE_SELF_POOL`, `ENQUEUE_KEY_INVALID` или `ENQUEUE_DRAINING`; runner превращает её в контролируемый `fail`.
 
 ## Выражения
 
@@ -398,6 +403,13 @@ const flow = createFlow(
 - `EXPRESSION_DIVISION_BY_ZERO` — деление/остаток на ноль
 - `EXPRESSION_OPERATOR_NOT_FOUND` — неизвестный оператор (не встроенный и не кастомный)
 - `EXPRESSION_PATH_NOT_FOUND` — индекс `at` вне диапазона или путь `get`/`property` не найден
+- `ENQUEUE_UNKNOWN_POOL` — `runtime.enqueue` указывает на несуществующий именованный пул
+- `ENQUEUE_SELF_POOL` — пуловой запуск ставит работу в собственный пул
+- `ENQUEUE_KEY_INVALID` — вычисленный ключ линии не является строкой
+- `ENQUEUE_DRAINING` — пул в состоянии drain или остановлен
+- `POOL_NOT_FOUND` — `flow.poolStats(name)` для несуществующего пула
+
+`EnqueueError` (бросается `runtime.enqueue`) несёт код в `slapError.code`; runner превращает её в контролируемый `fail`, а не в `ACTION_THROWN`. `PoolError` бросается `poolStats`.
 
 ## Guards
 
@@ -432,7 +444,10 @@ Guards существуют, чтобы критерий истинности ж
 - недопустимые режимы;
 - недопустимые ссылки на пути;
 - циклы без завершающего шага;
-- ссылки на guards (`GUARD_NOT_FOUND`, `GUARD_CYCLE`, `GUARD_INVALID`).
+- ссылки на guards (`GUARD_NOT_FOUND`, `GUARD_CYCLE`, `GUARD_INVALID`);
+- пуловые привязки в `start()`: `POOL_NOT_FOUND` (привязка ссылается на отсутствующий пул), `POOL_MODE_INVALID` (привязка ссылается на пул без `mode: 'workers'`), `POOL_WORKERS_INVALID` (пул без положительного целого `workers`), `WORKERS_REQUIRED` (приватный `workers`-пул без положительного `workers`), `KEY_INVALID` (декларативный `key`/`coalesce` не функция, не `$input.<path>` и не `$expression`) и `CONCURRENCY_GLOBAL_POOL` (глобальный `concurrency` задаёт `pool` или режим `workers` вместо per-binding).
+
+Предупреждения: `WORKERS_IGNORED` (`workers` без `mode: 'workers'`), `KEY_IGNORED` (декларативный `key` при не-`workers` режиме), `COALESCE_IGNORED` (`coalesce` при не-`workers` режиме), `POOL_FIELDS_IGNORED` (привязка дублирует `maxQueueSize`/`overflow`/`events`, уже заданные пулом) и `CONTEXT_NOT_FACTORY` (пулы заданы, а `context` — общий объект, а не функция).
 
 ## Трассировка
 
@@ -539,7 +554,7 @@ flow.stop()
 ```ts
 type StartResult = {
   active: string[]
-  inactive: Array<{ binding: string; reason: 'unsupported-source' }>
+  inactive: Array<{ binding: string; reason: 'unsupported-source' | 'dom-unavailable' }>
   validation: ValidationResult
 }
 ```
@@ -550,18 +565,47 @@ type StartResult = {
 
 ### Конкурентное выполнение
 
-Каждая привязка поддерживает `parallel`, `latest`, `queue` и `drop`. Режим по умолчанию — `parallel`. Управление конкурентностью действует в пределах одной привязки и линии; `key(payload)` создаёт независимые линии.
+Каждая привязка поддерживает `parallel`, `latest`, `queue`, `drop` и `workers`. Режим по умолчанию — `parallel`. Для `parallel|latest|queue|drop` управление конкурентностью действует в пределах одной привязки и линии; `key(payload)` создаёт независимые линии.
 
 ```ts
+type ConcurrencyKey<TPayload> = ((payload: TPayload) => string) | string | { $expression: unknown[] }
+
 type ConcurrencyOptions<TPayload> = {
-  mode?: 'parallel' | 'latest' | 'queue' | 'drop'
-  key?: (payload: TPayload) => string
+  mode?: 'parallel' | 'latest' | 'queue' | 'drop' | 'workers'
+  key?: ConcurrencyKey<TPayload>
+  workers?: number
+  pool?: string
   maxQueueSize?: number
-  overflow?: 'drop-oldest' | 'drop-newest'
+  overflow?: 'drop-oldest' | 'drop-newest' | 'wait'
+  events?: 'off' | 'sampled' | 'all'
+  eventsMinIntervalMs?: number
+  coalesce?: ConcurrencyKey<TPayload> | null
+}
+
+type PoolOptions = {
+  workers: number
+  maxQueueSize?: number
+  overflow?: 'drop-oldest' | 'drop-newest' | 'wait'
+  events?: 'off' | 'sampled' | 'all'
+  eventsMinIntervalMs?: number
 }
 ```
 
 Параметры задаются глобально в `createFlow` и могут быть переопределены привязкой. Размер `queue` ограничен параметром `maxQueueSize`, который по умолчанию равен `50`. При переполнении Slapflow публикует `slapflow.queue.overflow` и `slapflow.run.dropped`.
+
+`mode: 'workers'` прогоняет задачи через пул воркеров с ключом: одновременно исполняется не более `workers` запусков, задачи с одним ключом линии идут строго по FIFO и никогда параллельно, разные ключи — параллельно. Выбор work-conserving: среди линий без активного запуска берётся самая старая задача, поэтому одна забитая линия не блокирует свободные. Для `workers` по умолчанию `overflow: 'wait'` и `maxQueueSize: Infinity`; конечный `maxQueueSize` при `'wait'` применяет backpressure к продюсеру вместо потери. `key` принимает функцию, строку `$input.<path>` или `{ $expression }`; bare-строка или другой корень отклоняются на `start()`. Если вычисленное значение — не строка, событие-триггер дропается с `slapflow.run.dropped` и причиной `key-invalid`; `runtime.enqueue` сообщает ту же проблему кодом `ENQUEUE_KEY_INVALID`. Привязка без `key` использует одну неявную линию. `coalesce` заменяет ещё не начатую задачу с тем же токеном в той же линии.
+
+Привязка `workers` без `pool` использует приватный пул, ключом которого служит сама привязка. Именованные пулы объявляются в `FlowOptions.pools` и делятся привязками, ссылающимися на `concurrency.pool`; `workers`/`maxQueueSize`/`overflow` берутся из пула. Все привязки именованного пула обязаны использовать `mode: 'workers'` (иначе `POOL_MODE_INVALID`). Задача, ставящая работу в собственный пул, проваливается с `ENQUEUE_SELF_POOL`; продюсеры должны исполняться вне пула, который питают.
+
+Жизненный цикл `Flow` помимо привязок:
+
+```ts
+poolStats(): Record<string, PoolStats>
+poolStats(pool: string): PoolStats
+drain(options?: { timeoutMs?: number }): Promise<{ drained: boolean; remaining: number }>
+```
+
+`poolStats` возвращает `active`, `queued`, `oldestQueuedMs` и разбивку по ключам; простаивающие линии вытесняются. `drain` прекращает приём новых запусков, ждёт опустошения пулов и линий привязок и резолвится `{ drained: true, remaining: 0 }` — либо `{ drained: false, remaining }` по таймауту. Идемпотентен. Сам `drain` только отвязывает привязки и не блокирует `runtime.enqueue` (работающие продюсеры продолжают ставить задачи), поэтому `ENQUEUE_DRAINING` поднимается `stop()`/сбросом, а не `drain`.
 
 `ActionArgs` и `Runtime` содержат `signal: AbortSignal`. Режим `latest` прерывает предыдущий запуск в той же линии. `flow.stop({ force: true })` прерывает все активные запуски; обычный `stop()` удаляет привязки, но не отменяет выполняющиеся действия. Прерывание является кооперативным: действие использует сигнал для запросов, таймеров и собственной асинхронной работы.
 
@@ -572,7 +616,12 @@ type ConcurrencyOptions<TPayload> = {
 - `slapflow.run.failed`;
 - `slapflow.run.cancelled`;
 - `slapflow.run.dropped`;
-- `slapflow.queue.overflow`.
+- `slapflow.queue.overflow`;
+- `slapflow.task.queued`;
+- `slapflow.task.started`;
+- `slapflow.task.finished`.
+
+Для пуловых запусков `pools[pool].events` гейтит `task.*` и `run.started`/`run.finished` (по умолчанию `'off'`); `run.failed`/`run.cancelled` и `queue.overflow` публикуются всегда. Payload `run.*` несёт `pool` для корреляции.
 
 ### DOM-привязки
 

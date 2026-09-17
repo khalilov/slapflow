@@ -6,6 +6,8 @@ export { createFlow } from '~/createFlow'
 export { createWS } from '~/createWS'
 export { createWebSocket } from '~/createWebSocket'
 export { catchError } from '~/helpers/catchError'
+export { EnqueueError } from '~/helpers/errors/EnqueueError'
+export { PoolError } from '~/helpers/errors/PoolError'
 export { BUILTIN_ACTIONS, BUILTIN_ACTION_NAMES, type ActionsRegistry } from '~/helpers/actions'
 export { BUILTIN_CONDITIONS, BUILTIN_CONDITION_NAMES, type ConditionsRegistry } from '~/helpers/conditions'
 export {
@@ -18,9 +20,16 @@ export {
   type ActionSuccess,
   type ConditionExpression,
   type ConditionFn,
+  type ConcurrencyKey,
   type ConcurrencyMode,
   type ConcurrencyOptions,
   type Config,
+  type DrainResult,
+  type EnqueueErrorCode,
+  type EnqueueOptions,
+  type PoolEventMode,
+  type PoolOptions,
+  type PoolStats,
   type Bus,
   type BusBinding,
   type BusBindings,

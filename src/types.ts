@@ -211,15 +211,113 @@ export type BusBindingKey<TEvents extends object> = {
   [TEvent in EventName<TEvents>]: TEvents[TEvent] extends Input ? `[bus] ${TEvent}` : never
 }[EventName<TEvents>]
 
-export type ConcurrencyMode = 'parallel' | 'latest' | 'queue' | 'drop'
+export type ConcurrencyMode = 'parallel' | 'latest' | 'queue' | 'drop' | 'workers'
 
-export type QueueOverflow = 'drop-oldest' | 'drop-newest'
+export type QueueOverflow = 'drop-oldest' | 'drop-newest' | 'wait'
+
+export type PoolEventMode = 'off' | 'sampled' | 'all'
+
+export type ConcurrencyKey<TPayload = Input> = ((payload: TPayload) => string) | string | { $expression: unknown[] }
 
 export type ConcurrencyOptions<TPayload = Input> = {
   mode?: ConcurrencyMode
-  key?: (payload: TPayload) => string
+  key?: ConcurrencyKey<TPayload>
+  workers?: number
+  pool?: string
   maxQueueSize?: number
   overflow?: QueueOverflow
+  events?: PoolEventMode
+  eventsMinIntervalMs?: number
+  coalesce?: ConcurrencyKey<TPayload> | null
+}
+
+export type PoolOptions = {
+  workers: number
+  maxQueueSize?: number
+  overflow?: QueueOverflow
+  events?: PoolEventMode
+  eventsMinIntervalMs?: number
+}
+
+export type PoolStats = {
+  pool: string
+  workers: number
+  active: number
+  queued: number
+  oldestQueuedMs: number
+  perKey: Record<string, { active: number; queued: number; oldestQueuedMs: number }>
+}
+
+export type EnqueueOptions = {
+  pool: string
+  key?: string
+  coalesceToken?: string
+}
+
+export type EnqueueErrorCode = 'ENQUEUE_UNKNOWN_POOL' | 'ENQUEUE_SELF_POOL' | 'ENQUEUE_KEY_INVALID' | 'ENQUEUE_DRAINING'
+
+export type DrainResult = {
+  drained: boolean
+  remaining: number
+}
+
+export type ReadyHeapEntry<T> = {
+  value: T
+  at: number
+  seq: number
+}
+
+export type ReadyHeap<T> = {
+  size(): number
+  push(entry: ReadyHeapEntry<T>): void
+  pop(): ReadyHeapEntry<T> | undefined
+}
+
+export type PoolTaskInput = {
+  pool: string
+  entrypoint: string
+  input: Input
+  key: string
+  coalesceToken?: string
+  binding?: string
+}
+
+export type PoolTask = PoolTaskInput & { enqueuedAt: number }
+
+export type PoolScheduler = {
+  enqueue(task: PoolTaskInput): Promise<void>
+}
+
+export type PoolDefinition = {
+  name: string
+  named: boolean
+  workers: number
+  maxQueueSize: number
+  overflow: QueueOverflow
+  events: PoolEventMode
+  eventsMinIntervalMs: number
+}
+
+export type PoolLine = {
+  key: string
+  queue: PoolTask[]
+  active: boolean
+  readySeq: number
+}
+
+export type PoolWaiter = {
+  task: PoolTaskInput
+  resolve: () => void
+  reject: (error: Error) => void
+}
+
+export type Pool = PoolDefinition & {
+  lines: Map<string, PoolLine>
+  ready: ReadyHeap<PoolLine>
+  active: number
+  queued: number
+  seq: number
+  waiters: PoolWaiter[]
 }
 
 export type BusBinding<TPayload = Input> = {
@@ -275,6 +373,7 @@ export type FlowOptions<TContext, TPatch = unknown, TEvents extends object = Bin
   bus?: Bus<TEvents>
   root?: Document | Element
   concurrency?: ConcurrencyOptions
+  pools?: Record<string, PoolOptions>
   onRunnerError?: (event: RunnerErrorEvent<TContext, TPatch>) => void
 }
 
@@ -302,6 +401,9 @@ export type Flow<TContext, TPatch = unknown> = {
   runner: Runner<TContext, TPatch>
   start(): StartResult
   stop(options?: { force?: boolean }): void
+  poolStats(): Record<string, PoolStats>
+  poolStats(pool: string): PoolStats
+  drain(options?: { timeoutMs?: number }): Promise<DrainResult>
 }
 
 export type RunResult<TContext, TPatch = unknown> = {
@@ -337,6 +439,7 @@ export type Runtime = {
   patch(patch: unknown): void
   stop(reason?: string): ActionStop<unknown>
   fail(reason?: string, data?: Record<string, unknown>): ActionFail
+  enqueue?(entrypoint: string, input: Input, options: EnqueueOptions): Promise<void>
 }
 
 export type VariableValue =
@@ -363,6 +466,8 @@ export type ExpressionOperator = (args: unknown[]) => unknown
 
 export type RunOptions = {
   signal?: AbortSignal
+  pool?: string
+  binding?: string
 }
 
 export type TraceSink = {

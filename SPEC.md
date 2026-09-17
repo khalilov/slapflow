@@ -21,6 +21,8 @@ import {
   createFlow,
   createWebSocket,
   catchError,
+  EnqueueError,
+  PoolError,
 } from 'slapflow'
 ```
 
@@ -271,6 +273,7 @@ type Runtime = {
   patch(patch: unknown): void
   stop(reason?: string): ActionStop<unknown>
   fail(reason?: string, data?: Record<string, unknown>): ActionFail
+  enqueue?(entrypoint: string, input: Input, options: EnqueueOptions): Promise<void>
 }
 ```
 
@@ -281,6 +284,8 @@ type Runtime = {
 `runtime.variables.get` reads immutable runtime variables. `runtime.resolve` resolves `$context.*`, `$data.*`, `$input.*`, and immutable `$variables.*` values. It also evaluates `$expression` and `$template` objects recursively, using the expression operators registered in runner options. In `$template`, `{{ path }}` reads runtime data for compatibility; `{{ data.path }}`, `{{ context.path }}`, and `{{ input.path }}` select their source explicitly.
 
 Runtime path get/set is implemented directly through `objwalk`.
+
+`runtime.enqueue` is available only when `createFlow` is configured with `pools`/`workers`; otherwise the method is absent. It places a run into a named pool and resolves once the task is accepted (not when it finishes). `options.pool` is required; `options.key` is the already-computed line key (no path resolution); `options.coalesceToken` marks a replaceable signal. Enqueue failures throw `EnqueueError` with a `slapError.code` of `ENQUEUE_UNKNOWN_POOL`, `ENQUEUE_SELF_POOL`, `ENQUEUE_KEY_INVALID`, or `ENQUEUE_DRAINING`; the runner converts it into a controlled `fail`.
 
 ## Expressions
 
@@ -398,6 +403,13 @@ Usage in config:
 - `EXPRESSION_DIVISION_BY_ZERO` — divide/modulo by zero
 - `EXPRESSION_OPERATOR_NOT_FOUND` — unknown operator (not built-in or custom)
 - `EXPRESSION_PATH_NOT_FOUND` — `at` index out of bounds or `get`/`property` path not found
+- `ENQUEUE_UNKNOWN_POOL` — `runtime.enqueue` targets a missing named pool
+- `ENQUEUE_SELF_POOL` — a pooled run enqueues into its own pool
+- `ENQUEUE_KEY_INVALID` — the resolved line key is not a string
+- `ENQUEUE_DRAINING` — the pool is draining or stopped
+- `POOL_NOT_FOUND` — `flow.poolStats(name)` for a missing pool
+
+`EnqueueError` (thrown by `runtime.enqueue`) carries the code in `slapError.code`; the runner turns it into a controlled `fail` instead of `ACTION_THROWN`. `PoolError` is thrown by `poolStats`.
 
 ## Guards
 
@@ -432,7 +444,10 @@ Guards exist so a truth criterion can live in one place instead of being duplica
 - invalid modes;
 - invalid path references;
 - cycles without a terminal step;
-- guard references (`GUARD_NOT_FOUND`, `GUARD_CYCLE`, `GUARD_INVALID`).
+- guard references (`GUARD_NOT_FOUND`, `GUARD_CYCLE`, `GUARD_INVALID`);
+- pool bindings at `start()`: `POOL_NOT_FOUND` (a binding references a missing pool), `POOL_MODE_INVALID` (a binding references a pool without `mode: 'workers'`), `POOL_WORKERS_INVALID` (a pool without a positive integer `workers`), `WORKERS_REQUIRED` (private `workers` pool without a positive `workers`), `KEY_INVALID` (a declarative `key`/`coalesce` that is not a function, `$input.<path>`, or `$expression`), and `CONCURRENCY_GLOBAL_POOL` (global `concurrency` sets `pool` or `workers` mode instead of per binding).
+
+Warnings: `WORKERS_IGNORED` (`workers` without `mode: 'workers'`), `KEY_IGNORED` (declarative `key` on a non-`workers` mode), `COALESCE_IGNORED` (`coalesce` on a non-`workers` mode), `POOL_FIELDS_IGNORED` (a binding duplicates `maxQueueSize`/`overflow`/`events` already defined by its pool), and `CONTEXT_NOT_FACTORY` (pools are configured while `context` is a shared object rather than a function).
 
 ## Trace
 
@@ -539,7 +554,7 @@ A `[bus] <event-name>` binding starts an `entrypoint` from `config.entrypoints`.
 ```ts
 type StartResult = {
   active: string[]
-  inactive: Array<{ binding: string; reason: 'unsupported-source' }>
+  inactive: Array<{ binding: string; reason: 'unsupported-source' | 'dom-unavailable' }>
   validation: ValidationResult
 }
 ```
@@ -550,18 +565,47 @@ type StartResult = {
 
 ### Concurrency
 
-Each binding supports `parallel`, `latest`, `queue`, and `drop`. The default mode is `parallel`. Concurrency applies to one binding and lane; `key(payload)` creates independent lanes.
+Each binding supports `parallel`, `latest`, `queue`, `drop`, and `workers`. The default mode is `parallel`. For `parallel|latest|queue|drop`, concurrency applies to one binding and lane; `key(payload)` creates independent lanes.
 
 ```ts
+type ConcurrencyKey<TPayload> = ((payload: TPayload) => string) | string | { $expression: unknown[] }
+
 type ConcurrencyOptions<TPayload> = {
-  mode?: 'parallel' | 'latest' | 'queue' | 'drop'
-  key?: (payload: TPayload) => string
+  mode?: 'parallel' | 'latest' | 'queue' | 'drop' | 'workers'
+  key?: ConcurrencyKey<TPayload>
+  workers?: number
+  pool?: string
   maxQueueSize?: number
-  overflow?: 'drop-oldest' | 'drop-newest'
+  overflow?: 'drop-oldest' | 'drop-newest' | 'wait'
+  events?: 'off' | 'sampled' | 'all'
+  eventsMinIntervalMs?: number
+  coalesce?: ConcurrencyKey<TPayload> | null
+}
+
+type PoolOptions = {
+  workers: number
+  maxQueueSize?: number
+  overflow?: 'drop-oldest' | 'drop-newest' | 'wait'
+  events?: 'off' | 'sampled' | 'all'
+  eventsMinIntervalMs?: number
 }
 ```
 
 Options are set globally in `createFlow` and can be overridden by a binding. `queue` is limited by `maxQueueSize`, which defaults to `50`. On overflow, Slapflow publishes `slapflow.queue.overflow` and `slapflow.run.dropped`.
+
+`mode: 'workers'` runs tasks through a keyed worker pool: at most `workers` runs execute at once, tasks sharing a line key run in FIFO order and never in parallel, and different keys run concurrently. Selection is work-conserving — among lines without an active run the oldest queued task wins, so one flooded key cannot block idle lines. `workers` defaults to `overflow: 'wait'` and `maxQueueSize: Infinity`; a finite `maxQueueSize` with `'wait'` applies backpressure to the producer instead of dropping. `key` accepts a function, a `$input.<path>` string, or `{ $expression }`; a bare string or a non-`$input` root is rejected at `start()`. When the resolved value is not a string, the triggering event is dropped with `slapflow.run.dropped` and reason `key-invalid`; `runtime.enqueue` reports the same problem as `ENQUEUE_KEY_INVALID`. A binding without `key` uses one implicit line. `coalesce` replaces a not-yet-started task with the same token in the same line.
+
+A `workers` binding without `pool` uses a private pool keyed by the binding. Named pools are declared in `FlowOptions.pools` and shared by bindings that reference `concurrency.pool`; `workers`/`maxQueueSize`/`overflow` come from the pool. Every binding of a named pool must use `mode: 'workers'` (otherwise `POOL_MODE_INVALID`). A task that enqueues into its own pool fails with `ENQUEUE_SELF_POOL`; producers must run outside the pool they feed.
+
+`Flow` lifecycle beyond bindings:
+
+```ts
+poolStats(): Record<string, PoolStats>
+poolStats(pool: string): PoolStats
+drain(options?: { timeoutMs?: number }): Promise<{ drained: boolean; remaining: number }>
+```
+
+`poolStats` reports `active`, `queued`, `oldestQueuedMs`, and per-key lines; idle lines are evicted. `drain` stops accepting new runs, waits for pools and binding lanes to empty, and resolves `{ drained: true, remaining: 0 }` — or `{ drained: false, remaining }` on timeout. It is idempotent. `drain` itself only unbinds bindings; it does not block `runtime.enqueue` (in-flight producers keep placing work), so `ENQUEUE_DRAINING` is raised by `stop()`/reset, not by `drain`.
 
 `ActionArgs` and `Runtime` contain `signal: AbortSignal`. `latest` aborts the previous run in the same lane. `flow.stop({ force: true })` aborts every active run; normal `stop()` removes bindings and does not cancel running actions. Abort is cooperative: an action uses the signal for fetches, timers, and its own asynchronous work.
 
@@ -572,7 +616,12 @@ Lifecycle diagnostics are published through the configured bus:
 - `slapflow.run.failed`;
 - `slapflow.run.cancelled`;
 - `slapflow.run.dropped`;
-- `slapflow.queue.overflow`.
+- `slapflow.queue.overflow`;
+- `slapflow.task.queued`;
+- `slapflow.task.started`;
+- `slapflow.task.finished`.
+
+For pooled runs, `pools[pool].events` gates `task.*` and `run.started`/`run.finished` (`'off'` by default); `run.failed`/`run.cancelled` and `queue.overflow` are always published. `run.*` payloads carry `pool` for correlation.
 
 ### DOM Bindings
 

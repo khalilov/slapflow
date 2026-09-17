@@ -7,8 +7,11 @@ import { createRunner } from '~/createRunner'
 import {
   defineConfig,
   createMemoryTraceSink,
+  createFlow,
   BUILTIN_ACTIONS,
   BUILTIN_CONDITIONS,
+  EnqueueError,
+  PoolError,
   type Action,
   type ConditionFn,
   type RunResult,
@@ -60,6 +63,17 @@ describe('public contract', () => {
     assert.equal(new Map(BUILTIN_ACTIONS).has('core.noop'), true)
     assert.equal(new Map(BUILTIN_CONDITIONS).has('eq'), true)
     assert.equal(defineConfig(config), config)
+  })
+
+  it('exposes pool lifecycle on Flow and guarded enqueue errors', async () => {
+    const flow = createFlow({ config: { strategies: { root: { fn: 'core.noop' } } }, events: {} }, { context: {} })
+
+    assert.equal(typeof EnqueueError, 'function')
+    assert.equal(typeof PoolError, 'function')
+    assert.equal(typeof flow.poolStats, 'function')
+    assert.equal(typeof flow.drain, 'function')
+    assert.deepEqual(flow.poolStats(), {})
+    assert.deepEqual(await flow.drain(), { drained: true, remaining: 0 })
   })
 
   it('keeps spec built-in action names synchronized with implementation', async () => {

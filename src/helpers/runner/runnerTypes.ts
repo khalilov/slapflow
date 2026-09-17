@@ -3,6 +3,7 @@ import {
   type SlapError,
   type SlapEvent,
   type Input,
+  type PoolScheduler,
   type RunnerOptions,
   type TraceSink,
   type Variables,
@@ -46,6 +47,9 @@ export type RunState<TContext, TPatch> = {
   variables: Variables
   expressions: Record<string, import('~/types').ExpressionOperator>
   traceSink?: TraceSink
+  scheduler?: PoolScheduler | undefined
+  pool?: string | undefined
+  binding?: string | undefined
 }
 
 export type RunnerEnvironment<TContext, TPatch> = {
