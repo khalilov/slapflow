@@ -5,7 +5,9 @@ description: Use when writing or editing TypeScript that imports `slapflow`, cal
 
 # slapflow
 
-slapflow is a **declarative orchestration runtime**. You declare *strategies* (what to do, when, and what next) as a graph; the runner executes them. Ordinary TypeScript functions (actions, conditions) are the leaves. The graph owns ordering, branching, loops, and safety limits; application code supplies only the leaves.
+slapflow is a **declarative orchestration runtime**. You declare _strategies_ (what to do, when, and what next) as a
+graph; the runner executes them. Ordinary TypeScript functions (actions, conditions) are the leaves. The graph owns
+ordering, branching, loops, and safety limits; application code supplies only the leaves.
 
 ## Imports
 
@@ -51,72 +53,132 @@ const config: Config = {
 
 ## Execution modes
 
-| Mode       | Behaviour on non-`success`                          |
-|------------|-----------------------------------------------------|
-| `sequence` | **interrupts the rest** of `then` (default)         |
-| `selector` | tries next branch (`skipped` = try next)            |
-| `parallel` | runs all branches concurrently, isolated data       |
+| Mode       | Behaviour on non-`success`                    |
+|------------|-----------------------------------------------|
+| `sequence` | **interrupts the rest** of `then` (default)   |
+| `selector` | tries next branch (`skipped` = try next)      |
+| `parallel` | runs all branches concurrently, isolated data |
 
-A conditional step in a `sequence` is a **hidden early exit** for the whole remainder. If skipping must not break the chain, wrap it in a selector with `core.noop` fallback.
+A conditional step in a `sequence` is a **hidden early exit** for the whole remainder. If skipping must not break the
+chain, wrap it in a selector with `core.noop` fallback.
 
 ```ts
 // ❌ breaks the chain when condition fails
-{ fn: 'jobs.check', when: ['eq', '$context.ready', true], then: ['jobs.run'] }
+{
+  fn: 'jobs.check', when
+:
+  ['eq', '$context.ready', true], then
+:
+  ['jobs.run']
+}
 
 // ✅ selector with noop fallback — skipping is a normal outcome
-{ fn: 'core.selector', mode: 'selector', then: [
-  { fn: 'jobs.check', when: ['eq', '$context.ready', true], then: ['jobs.run'] },
-  { fn: 'core.noop' }
-]}
+{
+  fn: 'core.selector', mode
+:
+  'selector', then
+:
+  [
+    { fn: 'jobs.check', when: ['eq', '$context.ready', true], then: ['jobs.run'] },
+    { fn: 'core.noop' }
+  ]
+}
 ```
 
 ## Built-in actions
 
-| Action          | Required props                | Purpose                                    |
-|-----------------|-------------------------------|--------------------------------------------|
-| `core.noop`     | —                             | succeeds, does nothing                     |
-| `core.stop`     | `reason?`                     | stops the run cleanly                      |
-| `core.fail`     | `reason?`, `data?`            | fails strategy, triggers `catch`           |
-| `core.fetch`    | `url`, `method?`, `headers?`  | HTTP with retry, parsing, cancellation     |
+| Action          | Required props                    | Purpose                                |
+|-----------------|-----------------------------------|----------------------------------------|
+| `core.noop`     | —                                 | succeeds, does nothing                 |
+| `core.stop`     | `reason?`                         | stops the run cleanly                  |
+| `core.fail`     | `reason?`, `data?`                | fails strategy, triggers `catch`       |
+| `core.fetch`    | `url`, `method?`, `headers?`      | HTTP with retry, parsing, cancellation |
 | `core.loop`     | `duration?`, `max?`, `immediate?` | repeats `then` on interval             |
-| `core.sequence` | —                             | explicit sequence (default mode)           |
-| `core.selector` | —                             | explicit selector                          |
-| `core.parallel` | —                             | explicit parallel                          |
-| `core.set`      | `path`, `value?`, `data?`     | writes nested context value                |
-| `core.emit`     | `type`, `payload?`            | appends event to result                    |
-| `core.patch`    | `patch`                       | appends patch to result                    |
-| `core.delay`    | `ms?`                         | waits or aborts                            |
+| `core.sequence` | —                                 | explicit sequence (default mode)       |
+| `core.selector` | —                                 | explicit selector                      |
+| `core.parallel` | —                                 | explicit parallel                      |
+| `core.set`      | `path`, `value?`, `data?`         | writes nested context value            |
+| `core.emit`     | `type`, `payload?`                | appends event to result                |
+| `core.patch`    | `patch`                           | appends patch to result                |
+| `core.delay`    | `ms?`                             | waits or aborts                        |
 
-`core.loop`: `max: -1` disables iteration limit (safety limits still apply). Nested `core.loop` (including transitive via `then`/`catch`) is invalid. Default max is `999`. `immediate: true` runs first iteration without delay. Overlapping iterations are skipped; a failed iteration executes `catch`.
+`core.loop`: `max: -1` disables iteration limit (safety limits still apply). Nested `core.loop` (including transitive
+via `then`/`catch`) is invalid. Default max is `999`. `immediate: true` runs first iteration without delay. Overlapping
+iterations are skipped; a failed iteration executes `catch`.
 
-`core.fetch` props: **`url`**, `method?`, `headers?`, `body?`, `credentials?` (`include`|`same-origin`|`omit`), `response?` (`json`|`text`|`blob`|`arrayBuffer`|`none`), `dataPath?`, `contextPath?`, `acceptStatuses?`, `retryStatuses?`, `retry?`. Successful response is normalized as `{ status, ok, headers, body }`. Default retry: 2 attempts for network failures and `408`, `425`, `429`, `5xx`. Retry options: `initialDelay`, `maxDelay`, `multiplier`, `jitter`, `maxAttempts`.
+`core.fetch` props: **`url`
+**, `method?`, `headers?`, `body?`, `credentials?` (`include`|`same-origin`|`omit`), `response?` (`json`|`text`|`blob`|`arrayBuffer`|`none`), `dataPath?`, `contextPath?`, `acceptStatuses?`, `retryStatuses?`, `retry?`.
+Successful response is normalized as `{ status, ok, headers, body }`. Default retry: 2 attempts for network failures
+and `408`, `425`, `429`, `5xx`. Retry options: `initialDelay`, `maxDelay`, `multiplier`, `jitter`, `maxAttempts`.
 
 ## Built-in conditions
 
-`and`, `or`, `not`, `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `truthy`, `falsy`, `exists`, `missing`, `empty`, `notEmpty`, `includes`, `typeIs`, `changed`, `cooldownReady`.
+`and`, `or`, `not`, `ensure`, `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `truthy`, `falsy`, `exists`, `missing`, `empty`, `notEmpty`, `includes`, `typeIs`, `changed`, `cooldownReady`.
 
 ```ts
-['and', ['eq', '$context.status', 'ready'], ['gt', '$context.count', 0]]
-['cooldownReady', '$context.now', '$context.lastAt', 1000]
+;['and', ['eq', '$context.status', 'ready'], ['gt', '$context.count', 0]][
+  ('cooldownReady', '$context.now', '$context.lastAt', 1000)
+  ]
 ```
 
 Paths: `$context.path`, `$data.path`, `$input.path`, `$variables.path`.
 
+### `ensure` — declarative input invariant
+
+`ensure` turns a non-matching condition into a **routed failure**: instead of `skipped`, the strategy's `catch` runs,
+and `onError` is **not** invoked. Use it when the condition is an invariant of the input, not a routing discriminator.
+It is valid only as the **root** operator of a strategy `when` (or of a guard referenced as that root), and the strategy
+must define `catch`.
+
+```ts
+'check-session'
+:
+{
+  fn: 'check-session',
+    when
+:
+  ['ensure', ['and', ['exists', '$input.sessionId'], ['typeIs', '$input.sessionId', 'string']]],
+    props
+:
+  {
+    sessionId: '$input.sessionId'
+  }
+,
+  then: ['load-user-data'],
+catch:
+  ['require-auth'],
+}
+```
+
+Nested `ensure` inside `and`/`or`/`not` or in an inline `then`/`catch` condition → `ENSURE_PLACEMENT_INVALID`.
+Root `ensure` without `catch` → `ENSURE_WITHOUT_CATCH`. Resolution errors inside `ensure` (e.g. a missing `$variables`)
+fail loudly through `onError`; a failing `catch` branch is reported normally. Trace records status `failed`,
+reason `ensure did not match`.
+
+Validate the same source you pass
+to `props`: `when: ['ensure', ['exists', '$input.sessionId']]` + `props: { sessionId: '$input.sessionId' }` —
+no `runtime.data.get(...)` inside the action.
+
 ### Dynamic property access
 
-Path strings are resolved literally — `$context.character[$data.characterType]` treats `$data.characterType` as a literal key. For dynamic property access, use `$expression` with the `property` operator:
+Path strings are resolved literally — `$context.character[$data.characterType]` treats `$data.characterType` as a
+literal key. For dynamic property access, use `$expression` with the `property` operator:
 
 ```ts
 // ❌ literal path — picks key "$data.characterType", not its value
-['eq', '$context.character[$data.characterType]', 'warrior']
-
-// ✅ $expression — resolves $data.characterType first, then accesses the property
-['eq', { $expression: ['property', '$context.character', '$data.characterType'] }, 'warrior']
+;['eq', '$context.character[$data.characterType]', 'warrior'][
+  // ✅ $expression — resolves $data.characterType first, then accesses the property
+  ('eq', { $expression: ['property', '$context.character', '$data.characterType'] }, 'warrior')
+  ]
 ```
 
-Built-in expression operators: `add`, `subtract`, `multiply`, `divide`, `modulo`, `min`, `max`, `abs`, `round`, `floor`, `ceil`, `clamp`, `at` (array index), `property` (dynamic key), `get` (nested path string), `concat`.
+Built-in expression
+operators: `add`, `subtract`, `multiply`, `divide`, `modulo`, `min`, `max`, `abs`, `round`, `floor`, `ceil`, `clamp`, `at` (
+array index), `property` (dynamic key), `get` (nested path string), `concat`, `coalesce` (first non-nullish argument —
+use for props fallback: `{ $expression: ['coalesce', '$input.sessionId', '$data.sessionId'] }`).
 
-Custom operators can be registered via `expressions` in runner options. `$expression` args are recursively resolved, so nested refs like `$data.key` or another `$expression` work.
+Custom operators can be registered via `expressions` in runner options. `$expression` args are recursively resolved, so
+nested refs like `$data.key` or another `$expression` work.
 
 ## Creating and running a flow
 
@@ -132,24 +194,25 @@ const flow = createFlow<Context, Patch, Events>(
 )
 
 const { validation } = flow.start()
-if (!validation.ok) throw new Error(validation.issues.map(i => `[${i.code}] ${i.message}`).join('\n'))
+if (!validation.ok) throw new Error(validation.issues.map((i) => `[${i.code}] ${i.message}`).join('\n'))
 
 // Later
 const result = await flow.runner.run('worker.tick', context, input)
 ```
 
-`start()` registers actions/conditions, validates, loads config. Failed validation → bindings not installed. `stop({ force: true })` aborts active runs.
+`start()` registers actions/conditions, validates, loads config. Failed validation → bindings not
+installed. `stop({ force: true })` aborts active runs.
 
 ## Concurrency
 
 Each binding supports five modes. Default is `parallel`.
 
-| Mode       | Behaviour |
-|------------|-----------|
-| `parallel` | every event starts a new run concurrently |
-| `latest`   | aborts the previous run in the same lane, starts a new one |
-| `queue`    | queues up to `maxQueueSize` (default 50), runs FIFO |
-| `drop`     | ignores the event if a run is already active in the lane |
+| Mode       | Behaviour                                                                                    |
+|------------|----------------------------------------------------------------------------------------------|
+| `parallel` | every event starts a new run concurrently                                                    |
+| `latest`   | aborts the previous run in the same lane, starts a new one                                   |
+| `queue`    | queues up to `maxQueueSize` (default 50), runs FIFO                                          |
+| `drop`     | ignores the event if a run is already active in the lane                                     |
 | `workers`  | keyed worker pool: max `workers` runs, same key serialized FIFO, work-conserving across keys |
 
 ```ts
@@ -159,14 +222,18 @@ const flow = createFlow<Context, Patch, Events>(
 )
 ```
 
-`key(payload)` creates independent lanes — concurrency applies within one lane. `latest` uses `runtime.signal` (AbortSignal) so actions can cooperatively cancel. On `queue` overflow: bus publishes `slapflow.queue.overflow` and `slapflow.run.dropped`.
+`key(payload)` creates independent lanes — concurrency applies within one lane. `latest` uses `runtime.signal` (
+AbortSignal) so actions can cooperatively cancel. On `queue` overflow: bus publishes `slapflow.queue.overflow`
+and `slapflow.run.dropped`.
 
 `workers` uses a shared pool instead of per-binding lanes. Configure pools (and telemetry) in `FlowOptions`:
 
 ```ts
 const flow = createFlow<Context, Patch, Events>(
   {
-    config, actions, conditions,
+    config,
+    actions,
+    conditions,
     events: {
       '[bus] colony.observed': {
         entrypoint: 'colony.observed',
@@ -178,11 +245,20 @@ const flow = createFlow<Context, Patch, Events>(
 )
 ```
 
-`key` accepts a function, a `$input.<path>` string, or `{ $expression }`; bare strings and other roots are rejected at `start()`. A binding whose key resolves to a non-string drops the event (`slapflow.run.dropped`, reason `key-invalid`); `runtime.enqueue` reports `ENQUEUE_KEY_INVALID`. A binding without `key` uses one implicit line. `workers` defaults to `overflow: 'wait'`, `maxQueueSize: Infinity`. `coalesce` replaces a not-started task with the same token in the same line.
+`key` accepts a function, a `$input.<path>` string, or `{ $expression }`; bare strings and other roots are rejected
+at `start()`. A binding whose key resolves to a non-string drops the event (`slapflow.run.dropped`,
+reason `key-invalid`); `runtime.enqueue` reports `ENQUEUE_KEY_INVALID`. A binding without `key` uses one implicit
+line. `workers` defaults to `overflow: 'wait'`, `maxQueueSize: Infinity`. `coalesce` replaces a not-started task with
+the same token in the same line.
 
-Inside an action, `runtime.enqueue(entrypoint, input, { pool, key?, coalesceToken? })` fans work into a named pool; it resolves on acceptance. A task cannot enqueue into its own pool (`ENQUEUE_SELF_POOL`) — producers must run outside the pool they feed. Failures throw `EnqueueError` (exported), mapped by the runner to a controlled `fail`. `flow.poolStats('colony')` reports `active`/`queued`/`oldestQueuedMs`; `flow.drain({ timeoutMs })` waits for pools and binding lanes to empty.
+Inside an action, `runtime.enqueue(entrypoint, input, { pool, key?, coalesceToken? })` fans work into a named pool; it
+resolves on acceptance. A task cannot enqueue into its own pool (`ENQUEUE_SELF_POOL`) — producers must run outside the
+pool they feed. Failures throw `EnqueueError` (exported), mapped by the runner to a
+controlled `fail`. `flow.poolStats('colony')` reports `active`/`queued`/`oldestQueuedMs`; `flow.drain({ timeoutMs })`
+waits for pools and binding lanes to empty.
 
-`flow.stop({ force: true })` aborts **every** active run. Normal `stop()` removes bindings but does not cancel running actions.
+`flow.stop({ force: true })` aborts **every** active run. Normal `stop()` removes bindings but does not cancel running
+actions.
 
 ## `$variables` and `$template`
 
@@ -190,14 +266,18 @@ Inside an action, `runtime.enqueue(entrypoint, input, { pool, key?, coalesceToke
 
 ```ts
 // in condition args or $expression
-['eq', '$variables.API_VERSION', '2']
-{ $expression: ['at', '$variables.CONTRACTS', '$input.index'] }
+;['eq', '$variables.API_VERSION', '2']
+{
+  $expression: ['at', '$variables.CONTRACTS', '$input.index']
+}
 ```
 
 **`$template`** builds a string from interpolated parts with optional fallbacks:
 
 ```ts
-{ $template: 'Hello, {{ context.user.name }}! You have {{ data.count || 0 }} messages.' }
+{
+  $template: 'Hello, {{ context.user.name }}! You have {{ data.count || 0 }} messages.'
+}
 ```
 
 - `{{ path }}` reads runtime data (compatibility shorthand).
@@ -209,19 +289,20 @@ Inside an action, `runtime.enqueue(entrypoint, input, { pool, key?, coalesceToke
 
 Published through the configured bus:
 
-| Topic | Payload |
-|-------|---------|
-| `slapflow.run.started` | run metadata |
-| `slapflow.run.finished` | run result |
-| `slapflow.run.failed` | error + result |
-| `slapflow.run.cancelled` | aborted run |
-| `slapflow.run.dropped` | dropped by `latest`/`drop`, queue overflow, or reset |
-| `slapflow.queue.overflow` | queue full |
-| `slapflow.task.queued` | pool task accepted |
-| `slapflow.task.started` | pool task dispatched (`waitMs`) |
-| `slapflow.task.finished` | pool task done (`durationMs`, `status`) |
+| Topic                     | Payload                                              |
+|---------------------------|------------------------------------------------------|
+| `slapflow.run.started`    | run metadata                                         |
+| `slapflow.run.finished`   | run result                                           |
+| `slapflow.run.failed`     | error + result                                       |
+| `slapflow.run.cancelled`  | aborted run                                          |
+| `slapflow.run.dropped`    | dropped by `latest`/`drop`, queue overflow, or reset |
+| `slapflow.queue.overflow` | queue full                                           |
+| `slapflow.task.queued`    | pool task accepted                                   |
+| `slapflow.task.started`   | pool task dispatched (`waitMs`)                      |
+| `slapflow.task.finished`  | pool task done (`durationMs`, `status`)              |
 
-For pooled runs, `pools[pool].events` gates `task.*` and `run.started`/`run.finished` (`'off'` by default). `run.failed`/`run.cancelled` and `queue.overflow` are always published.
+For pooled runs, `pools[pool].events` gates `task.*` and `run.started`/`run.finished` (`'off'` by
+default). `run.failed`/`run.cancelled` and `queue.overflow` are always published.
 
 ```ts
 bus.on('slapflow.run.failed', ({ parsed }) => {
@@ -247,28 +328,33 @@ Register via `createFlow` options or `runner.registerAction`/`registerCondition`
 
 ### Action return normalization
 
-| Return                              | Outcome               |
-|-------------------------------------|-----------------------|
-| `undefined` / `null`                | `success`             |
-| `false`                             | `skipped`             |
-| `{ type: 'skip', reason?, data? }`  | `skipped` (selector tries next) |
-| `{ type: 'stop', reason?, patch?, events? }` | `stopped`    |
-| `{ type: 'fail', reason?, data?, error? }` | `failed` (catch runs) |
+| Return                                            | Outcome                                  |
+|---------------------------------------------------|------------------------------------------|
+| `undefined` / `null`                              | `success`                                |
+| `false`                                           | `skipped`                                |
+| `{ type: 'skip', reason?, data? }`                | `skipped` (selector tries next)          |
+| `{ type: 'stop', reason?, patch?, events? }`      | `stopped`                                |
+| `{ type: 'fail', reason?, data?, error? }`        | `failed` (catch runs)                    |
 | `{ context?, data?, patch?, events?, continue? }` | `success`; `continue: false` halts chain |
 
-## `when` vs action vs `runtime.fail`
+## `when` vs `ensure` vs action vs `runtime.fail`
 
-Three layers, each with a distinct job:
+Four layers, each with a distinct job:
 
-| Layer | Where | What it checks | Result on mismatch |
-|-------|-------|----------------|-------------------|
-| **`when`** | strategy | immediately available fields — presence, type, routing discriminator | `skipped` (selector tries next) |
-| **action** | leaf function | search, computation, domain state that needs reading/mutating | `skip` for "no match" normal outcome |
-| **`runtime.fail`** | inside action | execution invariant — something that *should never happen* given the `when` that admitted this path | `failed` (triggers `catch`, then `onError`) |
+| Layer              | Where                  | What it checks                                                                                      | Result on mismatch                          |
+|--------------------|------------------------|-----------------------------------------------------------------------------------------------------|---------------------------------------------|
+| **`when`**         | strategy               | immediately available fields — routing discriminator                                                | `skipped` (selector tries next)             |
+| **`ensure`**       | strategy (`when` root) | input invariant — required field, valid shape                                                       | `failed` → `catch`, **no** `onError`        |
+| **action**         | leaf function          | search, computation, domain state that needs reading/mutating                                       | `skip` for "no match" normal outcome        |
+| **`runtime.fail`** | inside action          | execution invariant — something that _should never happen_ given the `when` that admitted this path | `failed` (triggers `catch`, then `onError`) |
 
-**`skip` ≠ `fail`.** Domain "didn't work" (a faster actor took the job, a path was blocked, no matching record) is almost always a normal outcome — return `{ type: 'skip' }`. `fail` is reserved for broken invariants: the action was admitted by `when`, the data looked valid, but something went wrong mid-execution. Routing normal outcomes through `fail` turns every such case into an error event.
+**`skip` ≠ `fail`.** Domain "didn't work" (a faster actor took the job, a path was blocked, no matching record) is
+almost always a normal outcome — return `{ type: 'skip' }`. `fail` is reserved for broken invariants. Reach for `ensure`
+when an invariant is declaratively checkable from `when`/guards — it keeps validation out of the action and routes
+into `catch` quietly.
 
-Declare an entry criterion **once** — on a named strategy, not on every `then`/`catch` edge. Avoid inline `{ strategy, when }`. Set branch-specific context on a named strategy of that branch, not on a shared parent.
+Declare an entry criterion **once** — on a named strategy, not on every `then`/`catch` edge. Avoid
+inline `{ strategy, when }`. Set branch-specific context on a named strategy of that branch, not on a shared parent.
 
 ## Runtime helpers (inside actions)
 
@@ -282,8 +368,8 @@ runtime.resolve(value)         // resolve $context.*, $data.*, $input.*, $variab
 runtime.signal                 // AbortSignal for cancellation
 runtime.emit(event)            // append event
 runtime.patch(patch)           // append patch
-runtime.stop(reason?)          // return ActionStop
-runtime.fail(reason?, data?)   // return ActionFail
+runtime.stop(reason ?)          // return ActionStop
+runtime.fail(reason ?, data ?)   // return ActionFail
 runtime.executeThen()          // run this strategy's `then` branch
 runtime.executeCatch()         // run this strategy's `catch` branch
 runtime.enqueue(entrypoint, input, { pool, key?, coalesceToken? }) // place a run into a named pool (when pools configured)
@@ -293,18 +379,29 @@ runtime.enqueue(entrypoint, input, { pool, key?, coalesceToken? }) // place a ru
 
 ```ts
 guards: {
-  'has-colony': ['truthy', '$data.colonyId'],
-  'same-colony': ['eq', '$input.colonyId', '$context.colonyId'],
-},
+  'has-colony'
+:
+  ['truthy', '$data.colonyId'],
+    'same-colony'
+:
+  ['eq', '$input.colonyId', '$context.colonyId'],
+}
+,
 strategies: {
-  'colony.join': {
+  'colony.join'
+:
+  {
     fn: 'colony.join',
-    when: ['and', ['guard', 'has-colony'], ['not', ['guard', 'same-colony']]],
-  },
+      when
+  :
+    ['and', ['guard', 'has-colony'], ['not', ['guard', 'same-colony']]],
+  }
+,
 }
 ```
 
-Guards expand once at `loadConfig`. Undefined → `GUARD_NOT_FOUND`, cycles → `GUARD_CYCLE`.
+Guards expand once at `loadConfig`. Undefined → `GUARD_NOT_FOUND`, cycles → `GUARD_CYCLE`. A guard whose root
+is `ensure` is allowed when referenced as the strategy's whole `when`.
 
 ## PubSub bus
 
@@ -314,7 +411,8 @@ bus.on('auth.signed-in', ({ parsed }) => console.log(parsed.userId))
 bus.emit('auth.signed-in', { userId: 'ada' })
 ```
 
-Wildcard: `hub.user.*` matches one segment (`hub.user.created`), not `hub.user.audit.export`. Wildcard handlers receive `parsed: unknown`.
+Wildcard: `hub.user.*` matches one segment (`hub.user.created`), not `hub.user.audit.export`. Wildcard handlers
+receive `parsed: unknown`.
 
 ## WebSocket client
 
@@ -326,7 +424,8 @@ ws.start()
 
 ## Error reporting
 
-`onError` fires for every failed run — even when `catch` recovers, the original error is still reported:
+`onError` fires for every failed run — even when `catch` recovers, the original error is still reported. The exception
+is an `ensure` mismatch, which routes into `catch` without invoking `onError`:
 
 ```ts
 const reportError = defineErrorReporter({
@@ -341,17 +440,21 @@ const reportError = defineErrorReporter({
 const flow = createFlow({ config, actions, conditions }, { context, bus, onError: reportError })
 ```
 
-`onRunnerError` in `FlowOptions` fires **only** when the final `RunResult.status === 'failed'` (i.e. `catch` did not recover). It receives `error`, `result`, `binding`, `entrypoint`, `runId`, and optional `key`.
+`onRunnerError` in `FlowOptions` fires **only** when the final `RunResult.status === 'failed'` (i.e. `catch` did not
+recover). It receives `error`, `result`, `binding`, `entrypoint`, `runId`, and optional `key`.
 
-**Use `onError`** for observability (log every failure). **Use `onRunnerError`** for alerting (unrecovered failures only).
+**Use `onError`** for observability (log every failure). **Use `onRunnerError`** for alerting (unrecovered failures
+only).
 
 ## Safety limits
 
-Defaults: `maxStepCount: 1000`, `maxDepth: 32`, `timeout: 0`, `trace: false`. Set `-1` to disable a limit (emits `LIMIT_DISABLED` warning).
+Defaults: `maxStepCount: 1000`, `maxDepth: 32`, `timeout: 0`, `trace: false`. Set `-1` to disable a limit (
+emits `LIMIT_DISABLED` warning).
 
 ## Trace
 
-Enable with `trace: true` in flow options. Each entry records: step/depth, strategy/fn/mode, status, input, props, dataBefore/dataAfter, durationMs, reason. Does not store a full context snapshot.
+Enable with `trace: true` in flow options. Each entry records: step/depth, strategy/fn/mode, status, input, props,
+dataBefore/dataAfter, durationMs, reason. Does not store a full context snapshot.
 
 ```ts
 const flow = createFlow({ config, actions, conditions }, { context, bus, trace: true })
@@ -361,7 +464,8 @@ const flow = createFlow({ config, actions, conditions }, { context, bus, trace: 
 ## Key rules
 
 - **`when`/`action`/`fail` have distinct roles** — see "`when` vs action vs `runtime.fail`" above.
-- **Branching = selector, not `catch`.** `catch` fires only on `fail`/throw. Domain "didn't work" is normal → use selector.
+- **Branching = selector, not `catch`.** `catch` fires only on `fail`/throw. Domain "didn't work" is normal → use
+  selector.
 - **`terminal: true`** stops the chain after that strategy even on `success`.
 - **Context is mutable and shared** — mutate synchronously; no `await` between reading and writing the same field.
 

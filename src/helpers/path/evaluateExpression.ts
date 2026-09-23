@@ -105,6 +105,12 @@ export const evaluateExpression = (
     }
     return args.map(String).join('')
   }
+  if (operator === 'coalesce') {
+    if (args.length < 1) {
+      failExpression('EXPRESSION_INVALID_ARGUMENT', 'Expression "coalesce" requires at least one argument', details)
+    }
+    return args.find((value) => value !== null && value !== undefined)
+  }
 
   if (!Object.prototype.hasOwnProperty.call(custom, operator)) {
     failExpression('EXPRESSION_OPERATOR_NOT_FOUND', `Expression operator "${operator}" is not registered`, details)

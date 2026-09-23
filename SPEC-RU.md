@@ -113,7 +113,7 @@ type ErrorStage = {
 }
 ```
 
-Если ошибка обработана через `catch`, `onError` всё равно вызывается для исходного сбоя, а итоговый `run` может завершиться со статусом `success`.
+Если ошибка обработана через `catch`, `onError` всё равно вызывается для исходного сбоя, а итоговый `run` может завершиться со статусом `success`. Единственное исключение — `when`, закрытый `ensure`: несовпадение `ensure` уходит в `catch` без вызова `onError` (см. [Встроенные условия](#ensure)).
 
 ## Нормализация возврата действия
 
@@ -180,27 +180,46 @@ runner.registerCondition('hasQueue', hasItems)
 
 ## Встроенные условия
 
-| Условие         | Описание                                                                          | Пример                                                                          |
-| --------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `and`           | Совпадает, когда совпали все вложенные условия.                                   | `['and', ['typeIs', '$input.id', 'string'], ['notEmpty', '$input.id']]`         |
-| `or`            | Совпадает, когда совпало хотя бы одно вложенное условие.                          | `['or', ['eq', '$context.status', 'ready'], ['eq', '$context.status', 'idle']]` |
-| `not`           | Инвертирует вложенное условие.                                                    | `['not', ['truthy', '$context.disabled']]`                                      |
-| `eq`            | Сравнивает два значения через `Object.is`.                                        | `['eq', '$context.status', 'ready']`                                            |
-| `neq`           | Совпадает, когда `Object.is` не считает значения равными.                         | `['neq', '$context.status', 'failed']`                                          |
-| `gt`            | Численно сравнивает значения через `>`.                                           | `['gt', '$context.count', 0]`                                                   |
-| `gte`           | Численно сравнивает значения через `>=`.                                          | `['gte', '$context.count', 1]`                                                  |
-| `lt`            | Численно сравнивает значения через `<`.                                           | `['lt', '$context.count', 100]`                                                 |
-| `lte`           | Численно сравнивает значения через `<=`.                                          | `['lte', '$context.count', 99]`                                                 |
-| `truthy`        | Применяет JavaScript truthiness.                                                  | `['truthy', '$context.enabled']`                                                |
-| `falsy`         | Применяет JavaScript falsiness.                                                   | `['falsy', '$context.disabled']`                                                |
-| `exists`        | Совпадает для значений, отличных от `null` и `undefined`.                         | `['exists', '$data.response']`                                                  |
-| `missing`       | Совпадает для `null` или `undefined`.                                             | `['missing', '$data.error']`                                                    |
-| `empty`         | Совпадает для пустых строк, массивов, map, set, объектов и nullish-значений.      | `['empty', '$context.items']`                                                   |
-| `notEmpty`      | Совпадает для поддерживаемых значений с размером больше нуля.                     | `['notEmpty', '$context.items']`                                                |
-| `includes`      | Проверяет вхождение в строки, массивы и set.                                      | `['includes', ['parts', 'food'], '$input.resource']`                            |
-| `typeIs`        | Совпадает с `string`, `number`, `finite-number`, `boolean`, `array` или `record`. | `['typeIs', '$input.amount', 'finite-number']`                                  |
-| `changed`       | Совпадает, когда текущее и предыдущее значения различаются по `Object.is`.        | `['changed', '$context.current', '$context.previous']`                          |
-| `cooldownReady` | Совпадает, когда предыдущей метки времени нет или задержка истекла.               | `['cooldownReady', '$context.now', '$context.lastAt', 1000]`                    |
+| Условие         | Описание                                                                                                     | Пример                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `and`           | Совпадает, когда совпали все вложенные условия.                                                              | `['and', ['typeIs', '$input.id', 'string'], ['notEmpty', '$input.id']]`         |
+| `or`            | Совпадает, когда совпало хотя бы одно вложенное условие.                                                     | `['or', ['eq', '$context.status', 'ready'], ['eq', '$context.status', 'idle']]` |
+| `not`           | Инвертирует вложенное условие.                                                                               | `['not', ['truthy', '$context.disabled']]`                                      |
+| `ensure`        | Направляет несовпавшее условие в `catch` без вызова `onError`. Только корень стратегийного `when` или guard. | `['ensure', ['exists', '$input.sessionId']]`                                    |
+| `eq`            | Сравнивает два значения через `Object.is`.                                                                   | `['eq', '$context.status', 'ready']`                                            |
+| `neq`           | Совпадает, когда `Object.is` не считает значения равными.                                                    | `['neq', '$context.status', 'failed']`                                          |
+| `gt`            | Численно сравнивает значения через `>`.                                                                      | `['gt', '$context.count', 0]`                                                   |
+| `gte`           | Численно сравнивает значения через `>=`.                                                                     | `['gte', '$context.count', 1]`                                                  |
+| `lt`            | Численно сравнивает значения через `<`.                                                                      | `['lt', '$context.count', 100]`                                                 |
+| `lte`           | Численно сравнивает значения через `<=`.                                                                     | `['lte', '$context.count', 99]`                                                 |
+| `truthy`        | Применяет JavaScript truthiness.                                                                             | `['truthy', '$context.enabled']`                                                |
+| `falsy`         | Применяет JavaScript falsiness.                                                                              | `['falsy', '$context.disabled']`                                                |
+| `exists`        | Совпадает для значений, отличных от `null` и `undefined`.                                                    | `['exists', '$data.response']`                                                  |
+| `missing`       | Совпадает для `null` или `undefined`.                                                                        | `['missing', '$data.error']`                                                    |
+| `empty`         | Совпадает для пустых строк, массивов, map, set, объектов и nullish-значений.                                 | `['empty', '$context.items']`                                                   |
+| `notEmpty`      | Совпадает для поддерживаемых значений с размером больше нуля.                                                | `['notEmpty', '$context.items']`                                                |
+| `includes`      | Проверяет вхождение в строки, массивы и set.                                                                 | `['includes', ['parts', 'food'], '$input.resource']`                            |
+| `typeIs`        | Совпадает с `string`, `number`, `finite-number`, `boolean`, `array` или `record`.                            | `['typeIs', '$input.amount', 'finite-number']`                                  |
+| `changed`       | Совпадает, когда текущее и предыдущее значения различаются по `Object.is`.                                   | `['changed', '$context.current', '$context.previous']`                          |
+| `cooldownReady` | Совпадает, когда предыдущей метки времени нет или задержка истекла.                                          | `['cooldownReady', '$context.now', '$context.lastAt', 1000]`                    |
+
+### `ensure`
+
+`ensure` — управляющий оператор, превращающий несовпавшее условие в **направленный сбой**: вместо `skipped` исполняется ветка `catch` стратегии, а `onError` **не** вызывается. Это декларативная форма инварианта входа, тогда как `when` — роутинг, дающий `skipped`.
+
+```ts
+'check-session': {
+  fn: 'check-session',
+  when: ['ensure', ['and', ['exists', '$input.sessionId'], ['typeIs', '$input.sessionId', 'string']]],
+  props: { sessionId: '$input.sessionId' },
+  then: ['load-user-data'],
+  catch: ['require-auth'],
+}
+```
+
+`ensure` допустим только как корневой оператор стратегийного `when` (или guard, на который этот корень ссылается). Вложение внутрь `and`/`or`/`not` или использование в inline-условии шага `then`/`catch` — ошибка валидации (`ENSURE_PLACEMENT_INVALID`). Стратегия, у которой корневой `when` — это `ensure`, обязана определить `catch` (`ENSURE_WITHOUT_CATCH`).
+
+Ошибки разрешения внутри `ensure` (например, ссылка на отсутствующую `$variables`) не направляются тихо — они громко падают через `onError`. Если падает сама ветка `catch`, сбой репортится как обычно. В trace-записи стратегии фиксируются статус `failed` и причина `ensure did not match`.
 
 ## Пример конфигурации
 
@@ -292,7 +311,9 @@ type Runtime = {
 `$expression` вычисляет значение во время резолвинга. Используется везде, где работает `resolveValue`: аргументы условий, `props` стратегий, значения `core.set` и результаты действий.
 
 ```ts
-{ $expression: [оператор, ...аргументы] }
+{
+  $expression: [оператор, ...аргументы]
+}
 ```
 
 Аргументы рекурсивно резолвятся قبل вызова оператора, поэтому `$context.*`, `$data.*`, `$input.*`, `$variables.*`, вложенные `$expression` и `$template` работают внутри.
@@ -301,33 +322,34 @@ type Runtime = {
 
 **Математика**
 
-| Оператор | Аргументы | Результат |
-|----------|-----------|-----------|
-| `add` | 2+ чисел | сумма |
-| `subtract` | 2 числа | a − b |
-| `multiply` | 2+ чисел | произведение |
-| `divide` | 2 числа | a / b (ошибка при b = 0) |
-| `modulo` | 2 числа | a % b (ошибка при b = 0) |
-| `min` | 1+ чисел | минимальное |
-| `max` | 1+ чисел | максимальное |
-| `abs` | 1 число | \|n\| |
-| `round` | 1 число | ближайшее целое |
-| `floor` | 1 число | floor(n) |
-| `ceil` | 1 число | ceil(n) |
-| `clamp` | 3 числа | min(max(value, min), max) |
+| Оператор   | Аргументы | Результат                 |
+| ---------- | --------- | ------------------------- |
+| `add`      | 2+ чисел  | сумма                     |
+| `subtract` | 2 числа   | a − b                     |
+| `multiply` | 2+ чисел  | произведение              |
+| `divide`   | 2 числа   | a / b (ошибка при b = 0)  |
+| `modulo`   | 2 числа   | a % b (ошибка при b = 0)  |
+| `min`      | 1+ чисел  | минимальное               |
+| `max`      | 1+ чисел  | максимальное              |
+| `abs`      | 1 число   | \|n\|                     |
+| `round`    | 1 число   | ближайшее целое           |
+| `floor`    | 1 число   | floor(n)                  |
+| `ceil`     | 1 число   | ceil(n)                   |
+| `clamp`    | 3 числа   | min(max(value, min), max) |
 
 **Доступ**
 
-| Оператор | Аргументы | Результат |
-|----------|-----------|-----------|
-| `at` | массив, неотрицательное целое | элемент по индексу |
-| `property` | объект, строковый ключ | динамический доступ к свойству |
-| `get` | объект, строка пути | вложенный путь через `objwalk` |
+| Оператор   | Аргументы                     | Результат                         |
+| ---------- | ----------------------------- | --------------------------------- |
+| `at`       | массив, неотрицательное целое | элемент по индексу                |
+| `property` | объект, строковый ключ        | динамический доступ к свойству    |
+| `get`      | объект, строка пути           | вложенный путь через `objwalk`    |
+| `coalesce` | 1+ значений                   | первый не-nullish аргумент (`??`) |
 
 **Строки**
 
-| Оператор | Аргументы | Результат |
-|----------|-----------|-----------|
+| Оператор | Аргументы                             | Результат                |
+| -------- | ------------------------------------- | ------------------------ |
 | `concat` | 2+ примитивов, совместимых со строкой | конкатенированная строка |
 
 ### Кастомные операторы
@@ -350,7 +372,9 @@ const flow = createFlow(
 Использование в конфиге:
 
 ```ts
-{ $expression: ['calculateTax', '$input.amount', '$variables.TAX_RATE'] }
+{
+  $expression: ['calculateTax', '$input.amount', '$variables.TAX_RATE']
+}
 ```
 
 ### Примеры
@@ -358,44 +382,59 @@ const flow = createFlow(
 **Динамический доступ к свойству** — чтение поля контекста, ключ которого приходит из данных:
 
 ```ts
-['eq', { $expression: ['property', '$context.character', '$data.characterType'] }, 'warrior']
+;['eq', { $expression: ['property', '$context.character', '$data.characterType'] }, 'warrior']
 ```
 
 **Элемент массива** — выбор элемента по рантайм-индексу:
 
 ```ts
-{ $expression: ['at', '$variables.CONTRACTS', '$input.index'] }
+{
+  $expression: ['at', '$variables.CONTRACTS', '$input.index']
+}
 ```
 
 **Вложенный путь** — обход глубокой структуры строковым путём:
 
 ```ts
-{ $expression: ['get', '$data.response', 'items[0].price'] }
+{
+  $expression: ['get', '$data.response', 'items[0].price']
+}
 ```
 
 **Математика в условии** — сравнение вычисленного значения:
 
 ```ts
-['gt', { $expression: ['subtract', '$context.balance', '$input.amount'] }, 0]
+;['gt', { $expression: ['subtract', '$context.balance', '$input.amount'] }, 0]
 ```
 
 **Конкатенация строк** — сборка сообщения из частей:
 
 ```ts
-{ $expression: ['concat', 'Order #', '$input.orderId', ' confirmed'] }
+{
+  $expression: ['concat', 'Order #', '$input.orderId', ' confirmed']
+}
 ```
 
 **Вложенные выражения** — операторы разрешаются изнутри наружу:
 
 ```ts
 {
-  $expression: [
-    'concat',
-    'Tax: $',
-    { $expression: ['multiply', '$input.amount', '$variables.TAX_RATE'] },
-  ]
+  $expression: ['concat', 'Tax: $', { $expression: ['multiply', '$input.amount', '$variables.TAX_RATE'] }]
 }
 ```
+
+**Fallback в props** — взять первый доступный источник и передать его в действие:
+
+```ts
+'check-session': {
+  fn: 'check-session',
+  when: ['ensure', ['exists', '$input.sessionId']],
+  props: { sessionId: { $expression: ['coalesce', '$input.sessionId', '$data.sessionId'] } },
+  catch: ['require-auth'],
+}
+```
+
+`coalesce` возвращает первый аргумент, который не `null` и не `undefined`; пустая строка сохраняется. Отсутствующая ссылка `$variables` бросает ошибку до запуска `coalesce`, поэтому для fallback используйте `$input`/`$data`/`$context`.
 
 ### Коды ошибок
 
@@ -443,6 +482,7 @@ Guards существуют, чтобы критерий истинности ж
 - отсутствующие стратегии в `then`, `catch` и `entrypoints`;
 - недопустимые режимы;
 - недопустимые ссылки на пути;
+- размещение `ensure` (`ENSURE_PLACEMENT_INVALID`, когда это не корень стратегийного `when` или guard) и `ENSURE_WITHOUT_CATCH` (корневой `ensure` без ветки `catch`);
 - циклы без завершающего шага;
 - ссылки на guards (`GUARD_NOT_FOUND`, `GUARD_CYCLE`, `GUARD_INVALID`);
 - пуловые привязки в `start()`: `POOL_NOT_FOUND` (привязка ссылается на отсутствующий пул), `POOL_MODE_INVALID` (привязка ссылается на пул без `mode: 'workers'`), `POOL_WORKERS_INVALID` (пул без положительного целого `workers`), `WORKERS_REQUIRED` (приватный `workers`-пул без положительного `workers`), `KEY_INVALID` (декларативный `key`/`coalesce` не функция, не `$input.<path>` и не `$expression`) и `CONCURRENCY_GLOBAL_POOL` (глобальный `concurrency` задаёт `pool` или режим `workers` вместо per-binding).

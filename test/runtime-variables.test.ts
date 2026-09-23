@@ -178,8 +178,22 @@ describe('runtime variables and expressions', () => {
     })
   })
 
+  it('coalesces the first non-nullish expression argument', async () => {
+    const { received } = await runProps(
+      {
+        fromInput: { $expression: ['coalesce', '$input.missing', '$input.present'] },
+        emptyKept: { $expression: ['coalesce', '', '$input.present'] },
+        allMissing: { $expression: ['coalesce', '$input.a', '$data.b'] },
+      },
+      {},
+      { present: 'value' }
+    )
+    assert.deepEqual(received, { fromInput: 'value', emptyKept: '', allMissing: undefined })
+  })
+
   it('returns typed expression failures', async () => {
     const cases: Array<[Props, string]> = [
+      [{ value: { $expression: ['coalesce'] } }, 'EXPRESSION_INVALID_ARGUMENT'],
       [{ value: { $expression: ['add', '1', 2] } }, 'EXPRESSION_INVALID_ARGUMENT'],
       [{ value: { $expression: ['at', ['a'], 0, 'unexpected'] } }, 'EXPRESSION_INVALID_ARGUMENT'],
       [{ value: { $expression: ['divide', 1, 0] } }, 'EXPRESSION_DIVISION_BY_ZERO'],

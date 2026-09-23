@@ -36,12 +36,13 @@ export const validateConfig = (
       errors.push({ code: 'GUARD_INVALID', message: 'Config guards must be an object', path: 'guards' })
     } else {
       for (const [name, expression] of Object.entries(config.guards)) {
-        validateCondition(expression, name, `guards.${name}`, conditionsRegistry, errors)
+        validateCondition(expression, name, `guards.${name}`, conditionsRegistry, errors, { allowEnsure: true })
       }
     }
   }
 
-  for (const issue of resolveGuards(config).issues) {
+  const guardResolution = resolveGuards(config)
+  for (const issue of guardResolution.issues) {
     errors.push({
       code: issue.code,
       message: issue.message,
@@ -69,8 +70,17 @@ export const validateConfig = (
     }
     validateNextList(config, strategy.then, `${id}.then`, id, conditionsRegistry, errors)
     validateNextList(config, strategy.catch, `${id}.catch`, id, conditionsRegistry, errors)
-    validateCondition(strategy.when, id, `${id}.when`, conditionsRegistry, errors)
+    validateCondition(strategy.when, id, `${id}.when`, conditionsRegistry, errors, { allowEnsure: true })
     validateRefs(strategy.props, id, `${id}.props`, errors)
+    const resolvedWhen = guardResolution.config.strategies[id]?.when
+    if (Array.isArray(resolvedWhen) && resolvedWhen[0] === 'ensure' && !strategy.catch?.length) {
+      errors.push({
+        code: 'ENSURE_WITHOUT_CATCH',
+        message: 'Strategy with a root ensure condition must define catch',
+        strategy: id,
+        path: `${id}.when`,
+      })
+    }
   }
 
   for (const [name, target] of Object.entries(config.entrypoints ?? {})) {

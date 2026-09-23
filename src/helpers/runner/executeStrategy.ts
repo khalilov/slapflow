@@ -10,6 +10,7 @@ import { executeSequence } from '~/helpers/runner/executeSequence'
 import { executeThen } from '~/helpers/runner/executeThen'
 import { failLimit } from '~/helpers/runner/failLimit'
 import { handleFailure } from '~/helpers/runner/handleFailure'
+import { runCatch } from '~/helpers/runner/runCatch'
 import { isPromiseLike } from '~/helpers/runner/isPromiseLike'
 import { pushTrace } from '~/helpers/runner/pushTrace'
 import { resolveValue } from '~/helpers/path/resolveValue'
@@ -144,6 +145,35 @@ export const executeStrategy = <TContext, TPatch>(
     )
   }
   if (!condition.matched) {
+    if (condition.ensure) {
+      pushTrace(
+        state,
+        traceStep,
+        depth,
+        id,
+        strategy,
+        'failed',
+        traceProps,
+        dataBefore,
+        startedAt,
+        'ensure did not match'
+      )
+      if (strategy.catch?.length) {
+        return runCatch(strategy, depth, state, environment)
+      }
+
+      return {
+        status: 'failed',
+        error: slapError('ENSURE_FAILED', `ensure condition did not match at strategy "${id}"`, {
+          strategy: id,
+          fn: strategy.fn,
+          stage: { phase: 'condition', strategy: id, fn: strategy.fn, mode: strategy.mode, depth, step: traceStep },
+        }),
+        patches: [],
+        events: [],
+      }
+    }
+
     pushTrace(state, traceStep, depth, id, strategy, 'skipped', traceProps, dataBefore, startedAt)
     return { status: 'skipped', reason: 'when condition did not match', patches: [], events: [] }
   }

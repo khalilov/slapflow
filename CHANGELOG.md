@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Flow.poolStats()` (`active`/`queued`/`oldestQueuedMs` per pool and per key) and `Flow.drain({ timeoutMs })` for graceful shutdown.
 - Lifecycle events `slapflow.task.queued`, `slapflow.task.started`, and `slapflow.task.finished`.
 - Exported `EnqueueError` (with `ENQUEUE_UNKNOWN_POOL`, `ENQUEUE_SELF_POOL`, `ENQUEUE_KEY_INVALID`, `ENQUEUE_DRAINING`) and `PoolError`.
+- `ensure` control condition operator: a non-matching `when` (or guard root) runs the strategy's `catch` without invoking `onError`. Valid only as the root of a strategy `when` or guard (`ENSURE_PLACEMENT_INVALID`), and requires a `catch` branch (`ENSURE_WITHOUT_CATCH`).
+- `coalesce` built-in `$expression` operator: returns the first non-nullish argument.
 
 ### Changed
 
@@ -28,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documented
 
 - Worker pools, backpressure, fan-out, pool stats, and drain in `README`/`SPEC` and the agent skill.
+- `ensure` routing and the `coalesce` operator in `SPEC` and the agent skill.
 
 ## [1.2.0] - 2026-09-04
 

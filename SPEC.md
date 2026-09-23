@@ -113,7 +113,7 @@ type ErrorStage = {
 }
 ```
 
-If an error is recovered through `catch`, `onError` is still invoked for the original failure and the final `run` may finish with `success`.
+If an error is recovered through `catch`, `onError` is still invoked for the original failure and the final `run` may finish with `success`. The one exception is a `when` gated by `ensure`: a non-matching `ensure` routes into `catch` without invoking `onError` (see [Built-In Conditions](#ensure)).
 
 ## Action Return Normalization
 
@@ -180,27 +180,46 @@ Actions can execute their own configured branches through `runtime.executeThen()
 
 ## Built-In Conditions
 
-| Condition       | Description                                                                   | Example                                                                         |
-| --------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `and`           | Matches when every nested condition matches.                                  | `['and', ['typeIs', '$input.id', 'string'], ['notEmpty', '$input.id']]`         |
-| `or`            | Matches when at least one nested condition matches.                           | `['or', ['eq', '$context.status', 'ready'], ['eq', '$context.status', 'idle']]` |
-| `not`           | Inverts a nested condition.                                                   | `['not', ['truthy', '$context.disabled']]`                                      |
-| `eq`            | Compares two values with `Object.is`.                                         | `['eq', '$context.status', 'ready']`                                            |
-| `neq`           | Matches when `Object.is` does not consider the values equal.                  | `['neq', '$context.status', 'failed']`                                          |
-| `gt`            | Compares values numerically with `>`.                                         | `['gt', '$context.count', 0]`                                                   |
-| `gte`           | Compares values numerically with `>=`.                                        | `['gte', '$context.count', 1]`                                                  |
-| `lt`            | Compares values numerically with `<`.                                         | `['lt', '$context.count', 100]`                                                 |
-| `lte`           | Compares values numerically with `<=`.                                        | `['lte', '$context.count', 99]`                                                 |
-| `truthy`        | Applies JavaScript truthiness.                                                | `['truthy', '$context.enabled']`                                                |
-| `falsy`         | Applies JavaScript falsiness.                                                 | `['falsy', '$context.disabled']`                                                |
-| `exists`        | Matches values other than `null` and `undefined`.                             | `['exists', '$data.response']`                                                  |
-| `missing`       | Matches `null` or `undefined`.                                                | `['missing', '$data.error']`                                                    |
-| `empty`         | Matches empty strings, arrays, maps, sets, objects, and nullish values.       | `['empty', '$context.items']`                                                   |
-| `notEmpty`      | Matches supported values with a size greater than zero.                       | `['notEmpty', '$context.items']`                                                |
-| `includes`      | Checks membership in strings, arrays, and sets.                               | `['includes', ['parts', 'food'], '$input.resource']`                            |
-| `typeIs`        | Matches `string`, `number`, `finite-number`, `boolean`, `array`, or `record`. | `['typeIs', '$input.amount', 'finite-number']`                                  |
-| `changed`       | Matches when current and previous values differ by `Object.is`.               | `['changed', '$context.current', '$context.previous']`                          |
-| `cooldownReady` | Matches when no previous timestamp exists or the cooldown has elapsed.        | `['cooldownReady', '$context.now', '$context.lastAt', 1000]`                    |
+| Condition       | Description                                                                                                        | Example                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `and`           | Matches when every nested condition matches.                                                                       | `['and', ['typeIs', '$input.id', 'string'], ['notEmpty', '$input.id']]`         |
+| `or`            | Matches when at least one nested condition matches.                                                                | `['or', ['eq', '$context.status', 'ready'], ['eq', '$context.status', 'idle']]` |
+| `not`           | Inverts a nested condition.                                                                                        | `['not', ['truthy', '$context.disabled']]`                                      |
+| `ensure`        | Routes a non-matching condition into `catch` without reporting `onError`. Root of a strategy `when` or guard only. | `['ensure', ['exists', '$input.sessionId']]`                                    |
+| `eq`            | Compares two values with `Object.is`.                                                                              | `['eq', '$context.status', 'ready']`                                            |
+| `neq`           | Matches when `Object.is` does not consider the values equal.                                                       | `['neq', '$context.status', 'failed']`                                          |
+| `gt`            | Compares values numerically with `>`.                                                                              | `['gt', '$context.count', 0]`                                                   |
+| `gte`           | Compares values numerically with `>=`.                                                                             | `['gte', '$context.count', 1]`                                                  |
+| `lt`            | Compares values numerically with `<`.                                                                              | `['lt', '$context.count', 100]`                                                 |
+| `lte`           | Compares values numerically with `<=`.                                                                             | `['lte', '$context.count', 99]`                                                 |
+| `truthy`        | Applies JavaScript truthiness.                                                                                     | `['truthy', '$context.enabled']`                                                |
+| `falsy`         | Applies JavaScript falsiness.                                                                                      | `['falsy', '$context.disabled']`                                                |
+| `exists`        | Matches values other than `null` and `undefined`.                                                                  | `['exists', '$data.response']`                                                  |
+| `missing`       | Matches `null` or `undefined`.                                                                                     | `['missing', '$data.error']`                                                    |
+| `empty`         | Matches empty strings, arrays, maps, sets, objects, and nullish values.                                            | `['empty', '$context.items']`                                                   |
+| `notEmpty`      | Matches supported values with a size greater than zero.                                                            | `['notEmpty', '$context.items']`                                                |
+| `includes`      | Checks membership in strings, arrays, and sets.                                                                    | `['includes', ['parts', 'food'], '$input.resource']`                            |
+| `typeIs`        | Matches `string`, `number`, `finite-number`, `boolean`, `array`, or `record`.                                      | `['typeIs', '$input.amount', 'finite-number']`                                  |
+| `changed`       | Matches when current and previous values differ by `Object.is`.                                                    | `['changed', '$context.current', '$context.previous']`                          |
+| `cooldownReady` | Matches when no previous timestamp exists or the cooldown has elapsed.                                             | `['cooldownReady', '$context.now', '$context.lastAt', 1000]`                    |
+
+### `ensure`
+
+`ensure` is a control operator that turns a non-matching condition into a **routed failure**: instead of `skipped`, the strategy's `catch` branch runs, and `onError` is **not** invoked. It is the declarative form of an input invariant, whereas `when` is routing and produces `skipped`.
+
+```ts
+'check-session': {
+  fn: 'check-session',
+  when: ['ensure', ['and', ['exists', '$input.sessionId'], ['typeIs', '$input.sessionId', 'string']]],
+  props: { sessionId: '$input.sessionId' },
+  then: ['load-user-data'],
+  catch: ['require-auth'],
+}
+```
+
+`ensure` is valid only as the root operator of a strategy's `when` (or of a guard referenced as that root). Nesting it inside `and`/`or`/`not`, or using it in an inline `then`/`catch` step condition, is a validation error (`ENSURE_PLACEMENT_INVALID`). A strategy whose root `when` is `ensure` must define `catch` (`ENSURE_WITHOUT_CATCH`).
+
+Resolution errors inside `ensure` (for example a missing `$variables` reference) are not routed silently; they fail loudly through `onError`. When the `catch` branch itself fails, the failure is reported normally. The trace entry for the strategy records status `failed` and reason `ensure did not match`.
 
 ## Config Example
 
@@ -292,7 +311,9 @@ Runtime path get/set is implemented directly through `objwalk`.
 `$expression` evaluates a computation at resolution time. It appears wherever `resolveValue` runs: condition arguments, strategy `props`, `core.set` values, and action return values.
 
 ```ts
-{ $expression: [operator, ...args] }
+{
+  $expression: [operator, ...args]
+}
 ```
 
 Args are recursively resolved before the operator runs, so `$context.*`, `$data.*`, `$input.*`, `$variables.*`, nested `$expression`, and `$template` all work inside.
@@ -301,33 +322,34 @@ Args are recursively resolved before the operator runs, so `$context.*`, `$data.
 
 **Math**
 
-| Operator | Args | Result |
-|----------|------|--------|
-| `add` | 2+ numbers | sum |
-| `subtract` | 2 numbers | a − b |
-| `multiply` | 2+ numbers | product |
-| `divide` | 2 numbers | a / b (throws on b = 0) |
-| `modulo` | 2 numbers | a % b (throws on b = 0) |
-| `min` | 1+ numbers | smallest |
-| `max` | 1+ numbers | largest |
-| `abs` | 1 number | \|n\| |
-| `round` | 1 number | nearest integer |
-| `floor` | 1 number | floor(n) |
-| `ceil` | 1 number | ceil(n) |
-| `clamp` | 3 numbers | min(max(value, min), max) |
+| Operator   | Args       | Result                    |
+| ---------- | ---------- | ------------------------- |
+| `add`      | 2+ numbers | sum                       |
+| `subtract` | 2 numbers  | a − b                     |
+| `multiply` | 2+ numbers | product                   |
+| `divide`   | 2 numbers  | a / b (throws on b = 0)   |
+| `modulo`   | 2 numbers  | a % b (throws on b = 0)   |
+| `min`      | 1+ numbers | smallest                  |
+| `max`      | 1+ numbers | largest                   |
+| `abs`      | 1 number   | \|n\|                     |
+| `round`    | 1 number   | nearest integer           |
+| `floor`    | 1 number   | floor(n)                  |
+| `ceil`     | 1 number   | ceil(n)                   |
+| `clamp`    | 3 numbers  | min(max(value, min), max) |
 
 **Access**
 
-| Operator | Args | Result |
-|----------|------|--------|
-| `at` | array, non-negative integer | element at index |
-| `property` | object, string key | dynamic property access |
-| `get` | object, path string | nested path access via `objwalk` |
+| Operator   | Args                        | Result                            |
+| ---------- | --------------------------- | --------------------------------- |
+| `at`       | array, non-negative integer | element at index                  |
+| `property` | object, string key          | dynamic property access           |
+| `get`      | object, path string         | nested path access via `objwalk`  |
+| `coalesce` | 1+ values                   | first non-nullish argument (`??`) |
 
 **String**
 
-| Operator | Args | Result |
-|----------|------|--------|
+| Operator | Args                            | Result              |
+| -------- | ------------------------------- | ------------------- |
 | `concat` | 2+ string-compatible primitives | concatenated string |
 
 ### Custom operators
@@ -350,7 +372,9 @@ const flow = createFlow(
 Usage in config:
 
 ```ts
-{ $expression: ['calculateTax', '$input.amount', '$variables.TAX_RATE'] }
+{
+  $expression: ['calculateTax', '$input.amount', '$variables.TAX_RATE']
+}
 ```
 
 ### Examples
@@ -358,44 +382,59 @@ Usage in config:
 **Dynamic property access** — read a context field whose key comes from data:
 
 ```ts
-['eq', { $expression: ['property', '$context.character', '$data.characterType'] }, 'warrior']
+;['eq', { $expression: ['property', '$context.character', '$data.characterType'] }, 'warrior']
 ```
 
 **Array element** — pick an item by runtime index:
 
 ```ts
-{ $expression: ['at', '$variables.CONTRACTS', '$input.index'] }
+{
+  $expression: ['at', '$variables.CONTRACTS', '$input.index']
+}
 ```
 
 **Nested path** — traverse a deep structure with a string path:
 
 ```ts
-{ $expression: ['get', '$data.response', 'items[0].price'] }
+{
+  $expression: ['get', '$data.response', 'items[0].price']
+}
 ```
 
 **Math in a condition** — compare a computed value:
 
 ```ts
-['gt', { $expression: ['subtract', '$context.balance', '$input.amount'] }, 0]
+;['gt', { $expression: ['subtract', '$context.balance', '$input.amount'] }, 0]
 ```
 
 **String interpolation** — build a message from parts:
 
 ```ts
-{ $expression: ['concat', 'Order #', '$input.orderId', ' confirmed'] }
+{
+  $expression: ['concat', 'Order #', '$input.orderId', ' confirmed']
+}
 ```
 
 **Chained expressions** — nested operators resolve inside-out:
 
 ```ts
 {
-  $expression: [
-    'concat',
-    'Tax: $',
-    { $expression: ['multiply', '$input.amount', '$variables.TAX_RATE'] },
-  ]
+  $expression: ['concat', 'Tax: $', { $expression: ['multiply', '$input.amount', '$variables.TAX_RATE'] }]
 }
 ```
+
+**Props fallback** — read the first available source and pass it to the action:
+
+```ts
+'check-session': {
+  fn: 'check-session',
+  when: ['ensure', ['exists', '$input.sessionId']],
+  props: { sessionId: { $expression: ['coalesce', '$input.sessionId', '$data.sessionId'] } },
+  catch: ['require-auth'],
+}
+```
+
+`coalesce` returns the first argument that is neither `null` nor `undefined`; an empty string is kept. A missing `$variables` reference throws before `coalesce` runs, so use `$input`/`$data`/`$context` for fallbacks.
 
 ### Error codes
 
@@ -443,6 +482,7 @@ Guards exist so a truth criterion can live in one place instead of being duplica
 - missing strategies in `then`, `catch`, and `entrypoints`;
 - invalid modes;
 - invalid path references;
+- `ensure` placement (`ENSURE_PLACEMENT_INVALID` when it is not the root of a strategy `when` or guard) and `ENSURE_WITHOUT_CATCH` (a root `ensure` without a `catch` branch);
 - cycles without a terminal step;
 - guard references (`GUARD_NOT_FOUND`, `GUARD_CYCLE`, `GUARD_INVALID`);
 - pool bindings at `start()`: `POOL_NOT_FOUND` (a binding references a missing pool), `POOL_MODE_INVALID` (a binding references a pool without `mode: 'workers'`), `POOL_WORKERS_INVALID` (a pool without a positive integer `workers`), `WORKERS_REQUIRED` (private `workers` pool without a positive `workers`), `KEY_INVALID` (a declarative `key`/`coalesce` that is not a function, `$input.<path>`, or `$expression`), and `CONCURRENCY_GLOBAL_POOL` (global `concurrency` sets `pool` or `workers` mode instead of per binding).

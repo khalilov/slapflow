@@ -3,12 +3,17 @@ import { type RegistryReader } from '~/helpers/validation/registryReader'
 import { controlConditions } from '~/helpers/validation/validationConstants'
 import { validateRefs } from '~/helpers/validation/validateRefs'
 
+export type ValidateConditionOptions = {
+  allowEnsure?: boolean
+}
+
 export const validateCondition = (
   expression: unknown,
   strategy: string,
   path: string,
   conditionsRegistry: RegistryReader,
-  errors: ValidationIssue[]
+  errors: ValidationIssue[],
+  options: ValidateConditionOptions = {}
 ): void => {
   if (expression === undefined || typeof expression === 'boolean') {
     return
@@ -34,6 +39,28 @@ export const validateCondition = (
     return
   }
   if (operator === 'not') {
+    validateCondition(args[0], strategy, `${path}.1`, conditionsRegistry, errors)
+    return
+  }
+  if (operator === 'ensure') {
+    if (!options.allowEnsure) {
+      errors.push({
+        code: 'ENSURE_PLACEMENT_INVALID',
+        message: 'ensure is only allowed as the root operator of a strategy when or a guard',
+        strategy,
+        path,
+      })
+      return
+    }
+    if (args.length !== 1) {
+      errors.push({
+        code: 'CONDITION_INVALID',
+        message: 'ensure requires exactly one condition expression',
+        strategy,
+        path,
+      })
+      return
+    }
     validateCondition(args[0], strategy, `${path}.1`, conditionsRegistry, errors)
     return
   }

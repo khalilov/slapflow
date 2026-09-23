@@ -11,11 +11,13 @@ type EvaluateConditionScope<TContext> = {
   strategy?: string
 }
 
+export type ConditionOutcome = { ok: true; matched: boolean; ensure?: true } | { ok: false; error: SlapError }
+
 export const evaluateCondition = <TContext>(
   expression: ConditionExpression | undefined,
   registry: Map<string, ConditionFn<TContext>>,
   scope: EvaluateConditionScope<TContext>
-): { ok: true; matched: boolean } | { ok: false; error: SlapError } => {
+): ConditionOutcome => {
   if (expression === undefined) {
     return { ok: true, matched: true }
   }
@@ -34,6 +36,7 @@ export const evaluateCondition = <TContext>(
     return { ok: true, matched: true }
   }
   if (operator === 'or') {
+    let ensured = false
     for (const item of rawArgs as ConditionExpression[]) {
       const result = evaluateCondition(item, registry, scope)
       if (!result.ok) {
@@ -42,12 +45,22 @@ export const evaluateCondition = <TContext>(
       if (result.matched) {
         return { ok: true, matched: true }
       }
+      if (result.ensure) {
+        ensured = true
+      }
     }
-    return { ok: true, matched: false }
+    return ensured ? { ok: true, matched: false, ensure: true } : { ok: true, matched: false }
   }
   if (operator === 'not') {
     const result = evaluateCondition(rawArgs[0] as ConditionExpression, registry, scope)
     return result.ok ? { ok: true, matched: !result.matched } : result
+  }
+  if (operator === 'ensure') {
+    const result = evaluateCondition(rawArgs[0] as ConditionExpression, registry, scope)
+    if (!result.ok || result.matched) {
+      return result
+    }
+    return { ok: true, matched: false, ensure: true }
   }
 
   const condition = registry.get(operator)

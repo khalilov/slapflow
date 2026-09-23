@@ -1,7 +1,6 @@
 import { type SlapError, type Strategy } from '~/types'
-import { executeSequence } from '~/helpers/runner/executeSequence'
 import { withErrorStage } from '~/helpers/errors/withErrorStage'
-import { isPromiseLike } from '~/helpers/runner/isPromiseLike'
+import { runCatch } from '~/helpers/runner/runCatch'
 import { type Normalized, type RunState, type RunnerEnvironment } from '~/helpers/runner/runnerTypes'
 
 export const handleFailure = <TContext, TPatch>(
@@ -30,25 +29,7 @@ export const handleFailure = <TContext, TPatch>(
   })
   state.reportedErrors.push(stagedError)
   if (strategy.catch?.length) {
-    const caught = executeSequence(strategy.catch, depth, state, environment)
-    const stageCatchFailure = (result: Normalized<TContext, TPatch>): Normalized<TContext, TPatch> => {
-      if (result.status === 'failed') {
-        return {
-          ...result,
-          error: {
-            ...result.error,
-            stage: {
-              ...result.error.stage,
-              phase: 'catch',
-            },
-          },
-        }
-      }
-
-      return result
-    }
-
-    return isPromiseLike(caught) ? caught.then(stageCatchFailure) : stageCatchFailure(caught)
+    return runCatch(strategy, depth, state, environment)
   }
   return { status: 'failed', error: stagedError, patches: [], events: [] }
 }
