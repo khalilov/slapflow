@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
 import { createRunner } from '~/createRunner'
+import { resolveGuards } from '~/helpers/validation/resolveGuards'
 import { defineErrorReporter, type SlapErrorEvent } from '~/index'
 
 type Ctx = Record<string, unknown>
@@ -184,6 +185,81 @@ describe('ensure condition', () => {
     assert.equal(entry?.reason, 'ensure did not match')
   })
 
+  it('expands a guard reference inside ensure and matches', async () => {
+    const runner = createRunner<Ctx>()
+
+    runner.loadConfig({
+      guards: { 'session-ok': ['exists', '$input.sessionId'] },
+      strategies: {
+        root: {
+          fn: 'core.noop',
+          when: ['ensure', ['guard', 'session-ok']],
+          then: ['load'],
+          catch: ['require'],
+        },
+        load: { fn: 'core.patch', props: { patch: 'loaded' } },
+        require: { fn: 'core.patch', props: { patch: 'required' } },
+      },
+    })
+
+    const result = await runner.run('root', {}, { sessionId: 'abc' })
+
+    assert.equal(result.status, 'success')
+    assert.deepEqual(result.patches, ['loaded'])
+  })
+
+  it('routes a guard reference inside ensure into catch without reporting onError', async () => {
+    const reports: SlapErrorEvent<Ctx>[] = []
+    const runner = createRunner<Ctx>({ onError: defineErrorReporter((event) => reports.push(event)), trace: true })
+
+    runner.loadConfig({
+      guards: { 'session-ok': ['exists', '$input.sessionId'] },
+      strategies: {
+        root: {
+          fn: 'core.noop',
+          when: ['ensure', ['guard', 'session-ok']],
+          then: ['load'],
+          catch: ['require'],
+        },
+        load: { fn: 'core.patch', props: { patch: 'loaded' } },
+        require: { fn: 'core.patch', props: { patch: 'required' } },
+      },
+    })
+
+    const result = await runner.run('root', {})
+    const entry = result.trace?.find(({ strategy }) => strategy === 'root')
+
+    assert.equal(entry?.status, 'failed')
+    assert.deepEqual(result.patches, ['required'])
+    assert.equal(reports.length, 0)
+  })
+
+  it('expands a chain of guard references inside ensure', async () => {
+    const runner = createRunner<Ctx>()
+
+    runner.loadConfig({
+      guards: {
+        'level-two': ['exists', '$input.sessionId'],
+        'level-one': ['guard', 'level-two'],
+      },
+      strategies: {
+        root: {
+          fn: 'core.noop',
+          when: ['ensure', ['guard', 'level-one']],
+          then: ['load'],
+          catch: ['require'],
+        },
+        load: { fn: 'core.patch', props: { patch: 'loaded' } },
+        require: { fn: 'core.patch', props: { patch: 'required' } },
+      },
+    })
+
+    const result = await runner.run('root', {}, { sessionId: 'abc' })
+
+    assert.equal(result.status, 'success')
+    assert.deepEqual(result.patches, ['loaded'])
+  })
+
   it('resolves props from the same path validated by ensure', async () => {
     let received: unknown
     const runner = createRunner<Ctx>()
@@ -206,5 +282,25 @@ describe('ensure condition', () => {
     await runner.run('root', {}, { sessionId: 'abc' })
 
     assert.equal(received, 'abc')
+  })
+})
+
+describe('resolveGuards ensure expansion', () => {
+  it('expands a guard reference inside ensure', () => {
+    const { config, issues } = resolveGuards({
+      guards: { 'session-ok': ['exists', '$input.sessionId'] },
+      strategies: { root: { fn: 'core.noop', when: ['ensure', ['guard', 'session-ok']], catch: ['next'] } },
+    })
+
+    assert.deepEqual(issues, [])
+    assert.deepEqual(config.strategies.root?.when, ['ensure', ['exists', '$input.sessionId']])
+  })
+
+  it('reports a missing guard referenced inside ensure', () => {
+    const { issues } = resolveGuards({
+      strategies: { root: { fn: 'core.noop', when: ['ensure', ['guard', 'missing']], catch: ['next'] } },
+    })
+
+    assert.equal(issues[0]?.code, 'GUARD_NOT_FOUND')
   })
 })

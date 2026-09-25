@@ -55,12 +55,12 @@ const resolveExpression = (
     return { expression: [operator, ...resolved] as ConditionExpression }
   }
 
-  if (operator === 'not') {
+  if (operator === 'not' || operator === 'ensure') {
     const result = resolveExpression(config, args[0] as ConditionExpression, visiting, `${path}.1`)
     if (result.issue) {
       return result
     }
-    return { expression: ['not', result.expression] as ConditionExpression }
+    return { expression: [operator, result.expression] as ConditionExpression }
   }
 
   return { expression }
