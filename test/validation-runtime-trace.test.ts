@@ -195,6 +195,8 @@ describe('runtime helpers', () => {
       reportedErrors: [],
       variables: {},
       expressions: {},
+      runId: 'test-run',
+      spawnDepth: 0,
     }
     const runtime = createRuntime(state)
 
@@ -233,6 +235,8 @@ describe('runtime helpers', () => {
       reportedErrors: [],
       variables: {},
       expressions: {},
+      runId: 'test-run',
+      spawnDepth: 0,
     }
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const runtime = createRuntime(state)

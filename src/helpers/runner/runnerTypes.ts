@@ -4,6 +4,7 @@ import {
   type SlapEvent,
   type Input,
   type PoolScheduler,
+  type Runner,
   type RunnerOptions,
   type TraceSink,
   type Variables,
@@ -50,6 +51,9 @@ export type RunState<TContext, TPatch> = {
   scheduler?: PoolScheduler | undefined
   pool?: string | undefined
   binding?: string | undefined
+  runId: string
+  parentRunId?: string | undefined
+  spawnDepth: number
 }
 
 export type RunnerEnvironment<TContext, TPatch> = {
@@ -60,4 +64,5 @@ export type RunnerEnvironment<TContext, TPatch> = {
   configRef: { current?: Config }
   options: RunnerOptions<TContext, TPatch>
   mergeData: (current: Record<string, unknown>, next: Record<string, unknown>) => Record<string, unknown>
+  runnerRef: { current?: Runner<TContext, TPatch> }
 }

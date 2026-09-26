@@ -151,21 +151,22 @@ Configuration validation accesses registries through the minimal `has(name)` con
 
 ## Built-In Actions
 
-| Action          | Props                                                                                                                                              | Description                                                                                                       |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `core.noop`     | —                                                                                                                                                  | Completes successfully without changing runtime state.                                                            |
-| `core.stop`     | `reason?`                                                                                                                                          | Stops the run with an optional reason.                                                                            |
-| `core.fail`     | `reason?`, `data?`                                                                                                                                 | Fails the current strategy with an optional reason and error data.                                                |
-| `core.fetch`    | **`url`**, `method?`, `headers?`, `body?`, `credentials?`, `response?`, `dataPath?`, `contextPath?`, `acceptStatuses?`, `retryStatuses?`, `retry?` | Fetches data with cancellation, response parsing, status control, and retry backoff.                              |
-| `core.loop`     | `duration?`, `max?`, `immediate?`                                                                                                                  | Repeats its `then` branch on an interval until aborted or the iteration limit is reached.                         |
-| `core.sequence` | —                                                                                                                                                  | Executes `then` targets in order.                                                                                 |
-| `core.selector` | —                                                                                                                                                  | Executes `then` targets until one succeeds or stops.                                                              |
-| `core.parallel` | —                                                                                                                                                  | Executes `then` targets concurrently in isolated context and data branches.                                       |
-| `core.set`      | **`path`**, `value?`, `data?`                                                                                                                      | Writes `value` to a nested context `path`; optional `data` is merged into runtime data.                           |
-| `core.setData`  | **`path`**, `value?`, `data?`                                                                                                                      | **Deprecated.** Writes `value` to runtime data; use `runtime.data.set(path, value)` inside an application action. |
-| `core.emit`     | **`type`**, `payload?`                                                                                                                             | Appends an event to the run result.                                                                               |
-| `core.patch`    | **`patch`**                                                                                                                                        | Appends a patch to the run result.                                                                                |
-| `core.delay`    | `ms?`                                                                                                                                              | Waits for the configured duration or until the run is aborted.                                                    |
+| Action          | Props                                                                                                                                              | Description                                                                                                                         |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `core.noop`     | —                                                                                                                                                  | Completes successfully without changing runtime state.                                                                              |
+| `core.stop`     | `reason?`                                                                                                                                          | Stops the run with an optional reason.                                                                                              |
+| `core.fail`     | `reason?`, `data?`                                                                                                                                 | Fails the current strategy with an optional reason and error data.                                                                  |
+| `core.fetch`    | **`url`**, `method?`, `headers?`, `body?`, `credentials?`, `response?`, `dataPath?`, `contextPath?`, `acceptStatuses?`, `retryStatuses?`, `retry?` | Fetches data with cancellation, response parsing, status control, and retry backoff.                                                |
+| `core.invoke`   | **`entrypoint`**, `input?`                                                                                                                         | Starts another entrypoint as an independent run. Awaits and routes its result when `then`/`catch` exist; fire-and-forget otherwise. |
+| `core.loop`     | `duration?`, `max?`, `immediate?`                                                                                                                  | Repeats its `then` branch on an interval until aborted or the iteration limit is reached.                                           |
+| `core.sequence` | —                                                                                                                                                  | Executes `then` targets in order.                                                                                                   |
+| `core.selector` | —                                                                                                                                                  | Executes `then` targets until one succeeds or stops.                                                                                |
+| `core.parallel` | —                                                                                                                                                  | Executes `then` targets concurrently in isolated context and data branches.                                                         |
+| `core.set`      | **`path`**, `value?`, `data?`                                                                                                                      | Writes `value` to a nested context `path`; optional `data` is merged into runtime data.                                             |
+| `core.setData`  | **`path`**, `value?`, `data?`                                                                                                                      | **Deprecated.** Writes `value` to runtime data; use `runtime.data.set(path, value)` inside an application action.                   |
+| `core.emit`     | **`type`**, `payload?`                                                                                                                             | Appends an event to the run result.                                                                                                 |
+| `core.patch`    | **`patch`**                                                                                                                                        | Appends a patch to the run result.                                                                                                  |
+| `core.delay`    | `ms?`                                                                                                                                              | Waits for the configured duration or until the run is aborted.                                                                      |
 
 Bold props are required; `?` marks optional props. All names in this column are fields of the strategy's `props` object.
 
@@ -177,6 +178,8 @@ Actions can execute their own configured branches through `runtime.executeThen()
 `core.set` writes a nested context value through `runtime.set`. `core.setData` remains available for compatibility; new application actions should write temporary chain data through `runtime.data.set(path, value)`.
 
 `core.fetch` uses native `fetch` with the run signal. Its `response` prop selects `json`, `text`, `blob`, `arrayBuffer`, or `none`; successful responses are normalized as `{ status, ok, headers, body }` and can be written to `dataPath` or `contextPath`. `acceptStatuses` overrides the default `Response.ok` success condition. `credentials` accepts `include`, `same-origin`, or `omit` and is forwarded to native `fetch`. CORS, preflight requests, SameSite cookie rules, and server cookie policy remain the responsibility of the browser and server. `retry` accepts `initialDelay`, `maxDelay`, `multiplier`, `jitter`, and `maxAttempts`; `retryStatuses` overrides the default retryable statuses. The default performs two retries for network failures and statuses `408`, `425`, `429`, and `5xx`. Response-body parsing failures do not retry. An aborted request or retry returns `skip`. Retries are intended for replayable request bodies.
+
+`core.invoke` starts `props.entrypoint` (resolved against `entrypoints`) as an independent run that shares the current context, passing `props.input` as its `input`. When the strategy declares `then` or `catch`, the sub-run is awaited and its status is mapped onto the strategy: `success` runs `then` in the strategy's `mode`, `failed` runs `catch`, and `skipped`/`stopped` pass through. On `success` the sub-run data is merged into the parent data, so `then` can read it through `$data.*`. When neither branch is declared, `core.invoke` does not await the sub-run — a fire-and-forget call whose failures are reported through `onError` only. The sub-run inherits the parent signal and is limited by `maxSpawnDepth` (default `8`, `-1` disables), which counts nested `core.invoke` runs and fails with `MAX_SPAWN_DEPTH`; a literal target missing from the config raises `INVOKE_ENTRYPOINT_NOT_FOUND` as a validation warning.
 
 ## Built-In Conditions
 
@@ -293,6 +296,9 @@ type Runtime = {
   stop(reason?: string): ActionStop<unknown>
   fail(reason?: string, data?: Record<string, unknown>): ActionFail
   enqueue?(entrypoint: string, input: Input, options: EnqueueOptions): Promise<void>
+  invoke?(entrypoint: string, input?: Input): Promise<RunResult<unknown, unknown>>
+  hasThen?: boolean
+  hasCatch?: boolean
 }
 ```
 
@@ -305,6 +311,8 @@ type Runtime = {
 Runtime path get/set is implemented directly through `objwalk`.
 
 `runtime.enqueue` is available only when `createFlow` is configured with `pools`/`workers`; otherwise the method is absent. It places a run into a named pool and resolves once the task is accepted (not when it finishes). `options.pool` is required; `options.key` is the already-computed line key (no path resolution); `options.coalesceToken` marks a replaceable signal. Enqueue failures throw `EnqueueError` with a `slapError.code` of `ENQUEUE_UNKNOWN_POOL`, `ENQUEUE_SELF_POOL`, `ENQUEUE_KEY_INVALID`, or `ENQUEUE_DRAINING`; the runner converts it into a controlled `fail`.
+
+`runtime.invoke` starts another entrypoint as an independent run sharing the current context and signal, and resolves with that run's `RunResult`. Like `runtime.enqueue`, it is optional on the `Runtime` type so hand-written runtime mocks stay valid; the runtime created by the runner always provides it. `runtime.hasThen` and `runtime.hasCatch` report whether the current strategy declares those branches, letting `core.invoke` choose between awaiting and fire-and-forget.
 
 ## Expressions
 
@@ -487,7 +495,7 @@ Guards exist so a truth criterion can live in one place instead of being duplica
 - guard references (`GUARD_NOT_FOUND`, `GUARD_CYCLE`, `GUARD_INVALID`);
 - pool bindings at `start()`: `POOL_NOT_FOUND` (a binding references a missing pool), `POOL_MODE_INVALID` (a binding references a pool without `mode: 'workers'`), `POOL_WORKERS_INVALID` (a pool without a positive integer `workers`), `WORKERS_REQUIRED` (private `workers` pool without a positive `workers`), `KEY_INVALID` (a declarative `key`/`coalesce` that is not a function, `$input.<path>`, or `$expression`), and `CONCURRENCY_GLOBAL_POOL` (global `concurrency` sets `pool` or `workers` mode instead of per binding).
 
-Warnings: `WORKERS_IGNORED` (`workers` without `mode: 'workers'`), `KEY_IGNORED` (declarative `key` on a non-`workers` mode), `COALESCE_IGNORED` (`coalesce` on a non-`workers` mode), `POOL_FIELDS_IGNORED` (a binding duplicates `maxQueueSize`/`overflow`/`events` already defined by its pool), and `CONTEXT_NOT_FACTORY` (pools are configured while `context` is a shared object rather than a function).
+Warnings: `WORKERS_IGNORED` (`workers` without `mode: 'workers'`), `KEY_IGNORED` (declarative `key` on a non-`workers` mode), `COALESCE_IGNORED` (`coalesce` on a non-`workers` mode), `POOL_FIELDS_IGNORED` (a binding duplicates `maxQueueSize`/`overflow`/`events` already defined by its pool), `CONTEXT_NOT_FACTORY` (pools are configured while `context` is a shared object rather than a function), and `INVOKE_ENTRYPOINT_NOT_FOUND` (a literal `core.invoke` target — declared on the strategy or overridden by an inline `then`/`catch` `props` — is not defined).
 
 ## Trace
 
@@ -714,9 +722,10 @@ Defaults:
 
 - `maxStepCount`: `1000`
 - `maxDepth`: `32`
+- `maxSpawnDepth`: `8`
 - `timeout`: `0`
 - `trace`: `false`
 
-Limit failures are returned as failed results with `MAX_STEPS`, `MAX_DEPTH`, and `TIMEOUT` codes.
+Limit failures are returned as failed results with `MAX_STEPS`, `MAX_DEPTH`, `MAX_SPAWN_DEPTH`, and `TIMEOUT` codes.
 
-Set `maxStepCount` or `maxDepth` to `-1` to disable that check. Validation emits a `LIMIT_DISABLED` warning because unbounded runs may execute indefinitely and unbounded nesting may exhaust the call stack.
+Set `maxStepCount`, `maxDepth`, or `maxSpawnDepth` to `-1` to disable that check. Validation emits a `LIMIT_DISABLED` warning because unbounded runs may execute indefinitely and unbounded nesting may exhaust the call stack. `maxSpawnDepth` bounds nested `core.invoke` runs across run boundaries.

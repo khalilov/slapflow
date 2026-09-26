@@ -4,6 +4,7 @@ import { detectNestedLoops } from '~/helpers/validation/detectNestedLoops'
 import { validateCondition } from '~/helpers/validation/validateCondition'
 import { validateNextList } from '~/helpers/validation/validateNextList'
 import { validateRefs } from '~/helpers/validation/validateRefs'
+import { validateInvoke } from '~/helpers/validation/validateInvoke'
 import { resolveGuards } from '~/helpers/validation/resolveGuards'
 import { validModes } from '~/helpers/validation/validationConstants'
 import { type RegistryReader } from '~/helpers/validation/registryReader'
@@ -68,10 +69,11 @@ export const validateConfig = (
     if (strategy.mode && !validModes.has(strategy.mode)) {
       errors.push({ code: 'MODE_INVALID', message: `Mode "${strategy.mode}" is invalid`, strategy: id })
     }
-    validateNextList(config, strategy.then, `${id}.then`, id, conditionsRegistry, errors)
-    validateNextList(config, strategy.catch, `${id}.catch`, id, conditionsRegistry, errors)
+    validateNextList(config, strategy.then, `${id}.then`, id, conditionsRegistry, errors, warnings)
+    validateNextList(config, strategy.catch, `${id}.catch`, id, conditionsRegistry, errors, warnings)
     validateCondition(strategy.when, id, `${id}.when`, conditionsRegistry, errors, { allowEnsure: true })
     validateRefs(strategy.props, id, `${id}.props`, errors)
+    validateInvoke(config, strategy.fn, strategy.props ?? {}, id, `${id}.props.entrypoint`, warnings)
     const resolvedWhen = guardResolution.config.strategies[id]?.when
     if (Array.isArray(resolvedWhen) && resolvedWhen[0] === 'ensure' && !strategy.catch?.length) {
       errors.push({

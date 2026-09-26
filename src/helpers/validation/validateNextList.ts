@@ -1,7 +1,10 @@
-import { type Config, type ValidationIssue } from '~/types'
+import { type Config, type Props, type ValidationIssue } from '~/types'
+import { getNextTarget } from '~/helpers/validation/getNextTarget'
 import { validateCondition } from '~/helpers/validation/validateCondition'
+import { validateInvoke } from '~/helpers/validation/validateInvoke'
 import { validateRefs } from '~/helpers/validation/validateRefs'
 import { type RegistryReader } from '~/helpers/validation/registryReader'
+import { isRecord } from '~/helpers/type/isRecord'
 
 export const validateNextList = (
   config: Config,
@@ -9,7 +12,8 @@ export const validateNextList = (
   path: string,
   strategy: string,
   conditionsRegistry: RegistryReader,
-  errors: ValidationIssue[]
+  errors: ValidationIssue[],
+  warnings: ValidationIssue[]
 ): void => {
   if (list === undefined) {
     return
@@ -19,25 +23,31 @@ export const validateNextList = (
     return
   }
   list.forEach((item, index) => {
-    const target =
-      typeof item === 'string'
-        ? item
-        : item && typeof item === 'object'
-          ? (item as { strategy?: unknown }).strategy
-          : undefined
+    const target = getNextTarget(item)
+    const named = target === undefined ? undefined : config.strategies[target]
 
-    if (typeof target !== 'string' || !config.strategies[target]) {
+    if (!named) {
       errors.push({
         code: 'STRATEGY_NOT_FOUND',
         message: `Next strategy "${String(target)}" is not defined`,
         strategy,
         path: `${path}.${index}`,
       })
-    } else if (item && typeof item === 'object') {
-      const { props, when } = item as { props?: unknown; when?: unknown }
+      return
+    }
+    if (isRecord(item)) {
+      const { props, when } = item as { props?: Props; when?: unknown }
 
       validateCondition(when, strategy, `${path}.${index}.when`, conditionsRegistry, errors)
       validateRefs(props, strategy, `${path}.${index}.props`, errors)
+      validateInvoke(
+        config,
+        named.fn,
+        { ...(named.props ?? {}), ...(props ?? {}) },
+        strategy,
+        `${path}.${index}.props.entrypoint`,
+        warnings
+      )
     }
   })
 }

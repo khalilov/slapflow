@@ -93,6 +93,7 @@ chain, wrap it in a selector with `core.noop` fallback.
 | `core.stop`     | `reason?`                         | stops the run cleanly                  |
 | `core.fail`     | `reason?`, `data?`                | fails strategy, triggers `catch`       |
 | `core.fetch`    | `url`, `method?`, `headers?`      | HTTP with retry, parsing, cancellation |
+| `core.invoke`   | `entrypoint`, `input?`            | starts another entrypoint              |
 | `core.loop`     | `duration?`, `max?`, `immediate?` | repeats `then` on interval             |
 | `core.sequence` | —                                 | explicit sequence (default mode)       |
 | `core.selector` | —                                 | explicit selector                      |
@@ -110,6 +111,12 @@ iterations are skipped; a failed iteration executes `catch`.
 **, `method?`, `headers?`, `body?`, `credentials?` (`include`|`same-origin`|`omit`), `response?` (`json`|`text`|`blob`|`arrayBuffer`|`none`), `dataPath?`, `contextPath?`, `acceptStatuses?`, `retryStatuses?`, `retry?`.
 Successful response is normalized as `{ status, ok, headers, body }`. Default retry: 2 attempts for network failures
 and `408`, `425`, `429`, `5xx`. Retry options: `initialDelay`, `maxDelay`, `multiplier`, `jitter`, `maxAttempts`.
+
+`core.invoke`: starts `entrypoint` (resolved via `entrypoints`) as an independent run sharing the context, passing
+`input`. With `then`/`catch` declared it awaits the sub-run and maps its status (`success` → `then` in the strategy's
+`mode`, `failed` → `catch`, `skipped`/`stopped` pass through); on success the sub-run data is merged into the parent
+data so `then` can use `$data.*`. Without `then`/`catch` it is fire-and-forget — failures only reach `onError`. Nested
+invokes are capped by `maxSpawnDepth` (default `8`, `-1` disables) and fail with `MAX_SPAWN_DEPTH`.
 
 ## Built-in conditions
 
@@ -373,6 +380,8 @@ runtime.fail(reason ?, data ?)   // return ActionFail
 runtime.executeThen()          // run this strategy's `then` branch
 runtime.executeCatch()         // run this strategy's `catch` branch
 runtime.enqueue(entrypoint, input, { pool, key?, coalesceToken? }) // place a run into a named pool (when pools configured)
+runtime.invoke(entrypoint, input) // start another entrypoint run; await for its RunResult, ignore for fire-and-forget
+runtime.hasThen / runtime.hasCatch // whether this strategy declares those branches
 ```
 
 ## Guards

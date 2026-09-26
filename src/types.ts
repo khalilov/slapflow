@@ -440,6 +440,16 @@ export type Runtime = {
   stop(reason?: string): ActionStop<unknown>
   fail(reason?: string, data?: Record<string, unknown>): ActionFail
   enqueue?(entrypoint: string, input: Input, options: EnqueueOptions): Promise<void>
+  /**
+   * Starts another entrypoint as an independent run sharing this run's context.
+   * Await it to handle the result, or ignore the promise for fire-and-forget.
+   * Present only on runtimes created by the runner.
+   */
+  invoke?(entrypoint: string, input?: Input): Promise<RunResult<unknown, unknown>>
+  /** Whether the current strategy declares a `then` branch. */
+  hasThen?: boolean
+  /** Whether the current strategy declares a `catch` branch. */
+  hasCatch?: boolean
 }
 
 export type VariableValue =
@@ -460,6 +470,7 @@ export type RunnerOptions<TContext, TPatch> = {
   mergeData?: (current: Record<string, unknown>, next: Record<string, unknown>) => Record<string, unknown>
   variables?: Variables
   expressions?: Record<string, ExpressionOperator>
+  maxSpawnDepth?: number
 }
 
 export type ExpressionOperator = (args: unknown[]) => unknown
@@ -468,6 +479,8 @@ export type RunOptions = {
   signal?: AbortSignal
   pool?: string
   binding?: string
+  parentRunId?: string
+  spawnDepth?: number
 }
 
 export type TraceSink = {

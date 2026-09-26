@@ -15,6 +15,7 @@ describe('registry', () => {
       'core.emit',
       'core.fail',
       'core.fetch',
+      'core.invoke',
       'core.loop',
       'core.noop',
       'core.parallel',

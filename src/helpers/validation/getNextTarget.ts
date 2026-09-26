@@ -1,8 +1,11 @@
+import { isRecord } from '~/helpers/type/isRecord'
+import { isString } from '~/helpers/type/isString'
+
 export const getNextTarget = (next: unknown): string | undefined => {
-  if (typeof next === 'string') {
+  if (isString(next)) {
     return next
   }
-  if (next && typeof next === 'object' && 'strategy' in next && typeof next.strategy === 'string') {
+  if (isRecord(next) && isString(next.strategy)) {
     return next.strategy
   }
 

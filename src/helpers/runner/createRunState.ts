@@ -1,6 +1,7 @@
 import { type ExpressionOperator, type Input, type PoolScheduler, type TraceSink, type Variables } from '~/types'
 import { type RunCancellation } from '~/helpers/runner/createRunCancellation'
 import { type RunState } from '~/helpers/runner/runnerTypes'
+import { createId } from '~/helpers/ids/createId'
 
 export type RunStateArgs<TContext> = {
   context: TContext
@@ -13,6 +14,8 @@ export type RunStateArgs<TContext> = {
   pool?: string | undefined
   binding?: string | undefined
   traceSink?: TraceSink | undefined
+  parentRunId?: string | undefined
+  spawnDepth?: number | undefined
 }
 
 export const createRunState = <TContext, TPatch>(args: RunStateArgs<TContext>): RunState<TContext, TPatch> => ({
@@ -33,5 +36,8 @@ export const createRunState = <TContext, TPatch>(args: RunStateArgs<TContext>): 
   scheduler: args.scheduler,
   pool: args.pool,
   binding: args.binding,
+  runId: createId(),
+  parentRunId: args.parentRunId,
+  spawnDepth: args.spawnDepth ?? 0,
   ...(args.traceSink ? { traceSink: args.traceSink } : {}),
 })

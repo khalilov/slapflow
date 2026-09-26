@@ -3,6 +3,7 @@ import { coreDelay } from '~/helpers/actions/coreDelay'
 import { coreEmit } from '~/helpers/actions/coreEmit'
 import { coreFail } from '~/helpers/actions/coreFail'
 import { coreFetch } from '~/helpers/actions/coreFetch'
+import { coreInvoke } from '~/helpers/actions/coreInvoke'
 import { coreLoop } from '~/helpers/actions/coreLoop'
 import { coreNoop } from '~/helpers/actions/coreNoop'
 import { corePatch } from '~/helpers/actions/corePatch'
@@ -17,6 +18,7 @@ export const BUILTIN_ACTIONS: readonly [name: string, action: Action<unknown, un
   ['core.stop', coreStop],
   ['core.fail', coreFail],
   ['core.fetch', coreFetch],
+  ['core.invoke', coreInvoke],
   ['core.loop', coreLoop],
   ['core.sequence', coreNoop],
   ['core.selector', coreNoop],

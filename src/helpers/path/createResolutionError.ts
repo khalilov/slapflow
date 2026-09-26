@@ -1,5 +1,5 @@
 import { slapError } from '~/helpers/errors/slapError'
-import { type ResolveScope } from '~/helpers/path/resolveValue'
+import { type ResolveScope } from '~/helpers/path/resolveScope'
 import { ResolutionError } from '~/helpers/path/ResolutionError'
 
 export const createResolutionError = (

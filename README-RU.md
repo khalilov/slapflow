@@ -200,6 +200,7 @@ const flow = createFlow<Context, Patch, Events>(
 - Режимы `parallel`, `latest`, `queue` и `drop` с отдельными линиями для разных сущностей, а также keyed-пул `workers` с именованными пулами, backpressure и фан-аутом через `runtime.enqueue`.
 - Нативный WebSocket-клиент, проксирующий события сокета в шину.
 - `core.fetch` с разбором ответа, отменой и retry backoff.
+- `core.invoke` — запуск другого entrypoint из цепочки: с ожиданием и ветвлением по результату либо fire-and-forget для fan-out.
 - Нормализованный результат, трассировку выполнения, проверку конфигурации и диагностические события вроде `slapflow.run.started` и `slapflow.run.failed`.
 - Runtime-переменные для значений конфигурации, шаблонов и выражений.
 

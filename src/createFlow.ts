@@ -25,7 +25,7 @@ import {
 import { createRunner } from '~/createRunner'
 import { PubSub } from '~/createPubSub'
 import { PoolError } from '~/helpers/errors/PoolError'
-import { isInput } from '~/helpers/chain/isInput'
+import { isRecord } from '~/helpers/type/isRecord'
 import { parseDomBinding } from '~/helpers/chain/parseDomBinding'
 import { createPoolRegistry } from '~/helpers/pool/createPoolRegistry'
 import { isValidPoolKey } from '~/helpers/pool/isValidPoolKey'
@@ -448,7 +448,7 @@ export const createFlow = <TContext, TPatch = unknown, TEvents extends object = 
   const subscribeBusBinding = (binding: string, target: BusBinding): void => {
     const event = binding.slice(busBindingPrefix.length) as EventName<TEvents>
     const unsubscribe = bus.on(event, (busEvent) => {
-      if (isInput(busEvent.parsed)) {
+      if (isRecord(busEvent.parsed)) {
         scheduleRun(binding, target, busEvent.parsed)
       } else {
         emitDiagnostic('slapflow.run.dropped', {

@@ -17,6 +17,21 @@ describe('validation', () => {
     )
   })
 
+  it('reports invalid path refs with bracket-index paths for arrays', () => {
+    const runner = createRunner()
+    const result = runner.validateConfig({
+      strategies: {
+        root: { fn: 'core.noop', props: { list: ['$bad.path'] } },
+      },
+    })
+
+    assert.equal(result.ok, false)
+    assert.deepEqual(
+      result.errors.map((error) => error.path),
+      ['root.props.list[0]']
+    )
+  })
+
   it('rejects malformed then and catch items', () => {
     const runner = createRunner()
     const result = runner.validateConfig({

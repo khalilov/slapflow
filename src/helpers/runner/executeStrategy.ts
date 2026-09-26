@@ -1,4 +1,4 @@
-import { type ActionResult, type Props } from '~/types'
+import { type ActionResult, type Input, type Props, type RunResult } from '~/types'
 import { SyncAsyncError } from '~/helpers/errors/syncAsyncError'
 import { afterAction } from '~/helpers/runner/afterAction'
 import { slapError } from '~/helpers/errors/slapError'
@@ -113,11 +113,37 @@ export const executeStrategy = <TContext, TPatch>(
     )
   }
   const traceProps = redactVariableProps(rawProps, props) as Props
+  const invokeRun = (entrypoint: string, input: Input): Promise<RunResult<unknown, unknown>> => {
+    const runner = environment.runnerRef.current
+
+    if (!runner) {
+      const failure: RunResult<unknown, unknown> = {
+        status: 'failed',
+        context: state.context,
+        data: {},
+        patches: [],
+        events: [],
+        steps: 0,
+        error: slapError('RUNNER_UNAVAILABLE', 'Runner is not available for runtime.invoke'),
+      }
+
+      return Promise.resolve(failure)
+    }
+
+    return runner.run(entrypoint, state.context, input, {
+      signal: state.signal,
+      parentRunId: state.runId,
+      spawnDepth: state.spawnDepth + 1,
+    })
+  }
   const runtime = createRuntime(state, {
     executeThen: async () => toRuntimeResult(await executeThen(strategy, depth, state, environment)),
     executeCatch: strategy.catch?.length
       ? async () => toRuntimeResult(await executeSequence(strategy.catch!, depth, state, environment))
       : async () => undefined,
+    invoke: invokeRun,
+    hasThen: (strategy.then?.length ?? 0) > 0,
+    hasCatch: (strategy.catch?.length ?? 0) > 0,
   })
   const dataBefore = cloneData(state.data)
   const traceStep = state.stepCounter.current + 1

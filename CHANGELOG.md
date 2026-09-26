@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - Unreleased
+
+### Added
+
+- `core.invoke` built-in action: starts `props.entrypoint` as an independent run sharing the current context and signal, passing `props.input`. With `then`/`catch` declared, the sub-run is awaited and its status is mapped onto the strategy (success runs `then` in the strategy's `mode`, failure runs `catch`, and success data is merged into the parent data); without them it is fire-and-forget, with failures reported through `onError`.
+- `runtime.invoke(entrypoint, input?)` starts another entrypoint run and resolves with its `RunResult`.
+- `runtime.hasThen` / `runtime.hasCatch` report whether the current strategy declares those branches.
+- `RunnerOptions.maxSpawnDepth` (default `8`, `-1` disables) bounds nested `core.invoke` runs across run boundaries and fails with `MAX_SPAWN_DEPTH`.
+- `RunOptions.parentRunId` / `RunOptions.spawnDepth` carry invoke lineage.
+- Validation warning `INVOKE_ENTRYPOINT_NOT_FOUND` for a literal `core.invoke` target missing from the config, checked both on the strategy's own `props` and on inline `then`/`catch` `props` overrides.
+
 ## [1.3.0] - Unreleased
 
 ### Added
