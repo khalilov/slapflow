@@ -1,5 +1,5 @@
 import { pick, set } from 'objwalk'
-import { type EnqueueOptions, type Input, type RunResult, type Runtime, type RuntimeBranchResult } from '~/types'
+import { type EnqueueOptions, type Input, type Runtime, type RuntimeBranchResult } from '~/types'
 import { type RunState } from '~/helpers/runner/runnerTypes'
 import { EnqueueError } from '~/helpers/errors/EnqueueError'
 import { resolveValue } from '~/helpers/path/resolveValue'
@@ -7,11 +7,8 @@ import { stopResult } from '~/helpers/runner/stopResult'
 import { protectedPickOptions } from '~/helpers/path/protectedPickOptions'
 
 type RuntimeBranches = {
-  executeThen(): Promise<RuntimeBranchResult>
+  executeThen(options?: { input?: unknown }): Promise<RuntimeBranchResult>
   executeCatch(): Promise<RuntimeBranchResult | undefined>
-  invoke?: (entrypoint: string, input: Input) => Promise<RunResult<unknown, unknown>>
-  hasThen?: boolean
-  hasCatch?: boolean
 }
 
 export const createRuntime = <TContext, TPatch>(
@@ -19,8 +16,6 @@ export const createRuntime = <TContext, TPatch>(
   branches: RuntimeBranches = {
     executeThen: async () => ({ status: 'success' }),
     executeCatch: async () => undefined,
-    hasThen: false,
-    hasCatch: false,
   }
 ): Runtime => {
   const data = {
@@ -72,8 +67,8 @@ export const createRuntime = <TContext, TPatch>(
     },
     resolve: (value) => resolveValue(value, state),
     signal: state.signal,
-    executeThen: async () =>
-      state.closed ? { status: 'stopped', reason: 'Run is already finished' } : branches.executeThen(),
+    executeThen: async (options) =>
+      state.closed ? { status: 'stopped', reason: 'Run is already finished' } : branches.executeThen(options),
     executeCatch: async () => (state.closed ? undefined : branches.executeCatch()),
     emit: (event) => {
       if (!state.closed) {
@@ -92,8 +87,5 @@ export const createRuntime = <TContext, TPatch>(
       ...(failureData ? { data: failureData } : {}),
     }),
     ...(enqueue ? { enqueue } : {}),
-    ...(branches.invoke ? { invoke: branches.invoke } : {}),
-    hasThen: branches.hasThen ?? false,
-    hasCatch: branches.hasCatch ?? false,
   }
 }

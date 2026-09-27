@@ -1,38 +1,25 @@
-import { type ActionArgs, type ActionResult, type RunResult } from '~/types'
+import { type ActionArgs, type ActionResult } from '~/types'
 import { isRecord } from '~/helpers/type/isRecord'
+import { stopResult } from '~/helpers/runner/stopResult'
 
-export const coreInvoke = <TContext, TPatch>({
+export const coreInvoke = async <TContext, TPatch>({
   props,
   runtime,
-}: ActionArgs<TContext>): ActionResult<TContext, TPatch> | Promise<ActionResult<TContext, TPatch>> => {
-  const { entrypoint, input } = props
+}: ActionArgs<TContext>): Promise<ActionResult<TContext, TPatch>> => {
+  const { items } = props
 
-  if (typeof entrypoint !== 'string' || entrypoint.length === 0) {
-    return runtime.fail('core.invoke requires a non-empty "entrypoint" prop')
+  if (!Array.isArray(items) && !isRecord(items)) {
+    return runtime.fail('core.invoke requires "items" to be an array or object')
   }
-  if (!runtime.invoke) {
-    return runtime.fail('core.invoke is unavailable without a runner')
-  }
-  if (input !== undefined && !isRecord(input)) {
-    return runtime.fail('core.invoke "input" prop must be an object')
-  }
-  const pending = runtime.invoke(entrypoint, input ?? {})
+  const values = Array.isArray(items) ? items : Object.values(items)
 
-  if (!runtime.hasThen && !runtime.hasCatch) {
-    void pending.catch(() => undefined)
-    return
-  }
+  for (const item of values) {
+    const result = await runtime.executeThen({ input: item })
 
-  return pending.then((result: RunResult<unknown, unknown>): ActionResult<TContext, TPatch> => {
-    if (result.status === 'failed') {
-      return { type: 'fail', error: result.error, data: result.data }
-    }
-    if (result.status === 'skipped') {
-      return { type: 'skip', data: result.data }
-    }
     if (result.status === 'stopped') {
-      return { type: 'stop' }
+      return stopResult<TPatch>(result.reason)
     }
-    return { type: 'success', data: result.data, patch: result.patches as TPatch[], events: result.events }
-  })
+  }
+
+  return { continue: false }
 }

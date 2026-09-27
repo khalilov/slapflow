@@ -200,7 +200,7 @@ The pool is in-process and in-memory: it bounds concurrency and preserves per-ke
 - `parallel`, `latest`, `queue`, and `drop` concurrency modes with per-entity lanes, plus a keyed `workers` pool with named pools, backpressure, and `runtime.enqueue` fan-out.
 - A native WebSocket client that proxies socket events into the bus.
 - `core.fetch` with response parsing, cancellation, and retry backoff.
-- `core.invoke` to start another entrypoint from a chain, either awaiting and branching on its result or as fire-and-forget fan-out.
+- `core.invoke` to fan out a `then` branch over the elements of an array or object, exposing each element to the branch as `$input`.
 - Normalized results, execution trace, validation, and lifecycle diagnostics such as `slapflow.run.started` and `slapflow.run.failed`.
 - Runtime variables for configuration values, templates, and expressions.
 

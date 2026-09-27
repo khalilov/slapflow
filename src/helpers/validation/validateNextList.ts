@@ -1,7 +1,6 @@
 import { type Config, type Props, type ValidationIssue } from '~/types'
 import { getNextTarget } from '~/helpers/validation/getNextTarget'
 import { validateCondition } from '~/helpers/validation/validateCondition'
-import { validateInvoke } from '~/helpers/validation/validateInvoke'
 import { validateRefs } from '~/helpers/validation/validateRefs'
 import { type RegistryReader } from '~/helpers/validation/registryReader'
 import { isRecord } from '~/helpers/type/isRecord'
@@ -12,8 +11,7 @@ export const validateNextList = (
   path: string,
   strategy: string,
   conditionsRegistry: RegistryReader,
-  errors: ValidationIssue[],
-  warnings: ValidationIssue[]
+  errors: ValidationIssue[]
 ): void => {
   if (list === undefined) {
     return
@@ -40,14 +38,6 @@ export const validateNextList = (
 
       validateCondition(when, strategy, `${path}.${index}.when`, conditionsRegistry, errors)
       validateRefs(props, strategy, `${path}.${index}.props`, errors)
-      validateInvoke(
-        config,
-        named.fn,
-        { ...(named.props ?? {}), ...(props ?? {}) },
-        strategy,
-        `${path}.${index}.props.entrypoint`,
-        warnings
-      )
     }
   })
 }

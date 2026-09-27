@@ -33,8 +33,6 @@ const createScope = (context: Ctx = {}, data: Record<string, unknown> = {}) => {
     reportedErrors: [],
     variables: {},
     expressions: {},
-    runId: 'test-run',
-    spawnDepth: 0,
   }
 
   return {

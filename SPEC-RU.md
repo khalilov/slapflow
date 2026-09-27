@@ -151,35 +151,35 @@ runner.registerCondition('hasQueue', hasItems)
 
 ## Встроенные действия
 
-| Действие        | Props                                                                                                                                              | Описание                                                                                                                           |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `core.noop`     | —                                                                                                                                                  | Успешно завершается, не изменяя состояние runtime.                                                                                 |
-| `core.stop`     | `reason?`                                                                                                                                          | Останавливает запуск с необязательной причиной.                                                                                    |
-| `core.fail`     | `reason?`, `data?`                                                                                                                                 | Завершает текущую стратегию ошибкой с необязательной причиной и данными ошибки.                                                    |
-| `core.fetch`    | **`url`**, `method?`, `headers?`, `body?`, `credentials?`, `response?`, `dataPath?`, `contextPath?`, `acceptStatuses?`, `retryStatuses?`, `retry?` | Загружает данные с отменой, разбором ответа, контролем статусов и retry backoff.                                                   |
-| `core.invoke`   | **`entrypoint`**, `input?`                                                                                                                         | Запускает другой entrypoint отдельным запуском. Ждёт и маршрутизирует результат при наличии `then`/`catch`; иначе fire-and-forget. |
-| `core.loop`     | `duration?`, `max?`, `immediate?`                                                                                                                  | Повторяет ветку `then` по интервалу до отмены или достижения лимита итераций.                                                      |
-| `core.sequence` | —                                                                                                                                                  | Выполняет цели `then` по порядку.                                                                                                  |
-| `core.selector` | —                                                                                                                                                  | Выполняет цели `then` до первого успешного результата или остановки.                                                               |
-| `core.parallel` | —                                                                                                                                                  | Выполняет цели `then` параллельно в изолированных ветках context и data.                                                           |
-| `core.set`      | **`path`**, `value?`, `data?`                                                                                                                      | Записывает `value` во вложенный путь context; необязательный `data` объединяется с runtime data.                                   |
-| `core.setData`  | **`path`**, `value?`, `data?`                                                                                                                      | **Устарело.** Записывает `value` в runtime data; в прикладном действии используйте `runtime.data.set(path, value)`.                |
-| `core.emit`     | **`type`**, `payload?`                                                                                                                             | Добавляет событие в результат запуска.                                                                                             |
-| `core.patch`    | **`patch`**                                                                                                                                        | Добавляет patch в результат запуска.                                                                                               |
-| `core.delay`    | `ms?`                                                                                                                                              | Ждёт указанное время или отмену запуска.                                                                                           |
+| Действие        | Props                                                                                                                                              | Описание                                                                                                                |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `core.noop`     | —                                                                                                                                                  | Успешно завершается, не изменяя состояние runtime.                                                                      |
+| `core.stop`     | `reason?`                                                                                                                                          | Останавливает запуск с необязательной причиной.                                                                         |
+| `core.fail`     | `reason?`, `data?`                                                                                                                                 | Завершает текущую стратегию ошибкой с необязательной причиной и данными ошибки.                                         |
+| `core.fetch`    | **`url`**, `method?`, `headers?`, `body?`, `credentials?`, `response?`, `dataPath?`, `contextPath?`, `acceptStatuses?`, `retryStatuses?`, `retry?` | Загружает данные с отменой, разбором ответа, контролем статусов и retry backoff.                                        |
+| `core.invoke`   | **`items`**                                                                                                                                        | Выполняет ветку `then` по разу на каждый элемент `items` (значения массива или объекта), подставляя элемент в `$input`. |
+| `core.loop`     | `duration?`, `max?`, `immediate?`                                                                                                                  | Повторяет ветку `then` по интервалу до отмены или достижения лимита итераций.                                           |
+| `core.sequence` | —                                                                                                                                                  | Выполняет цели `then` по порядку.                                                                                       |
+| `core.selector` | —                                                                                                                                                  | Выполняет цели `then` до первого успешного результата или остановки.                                                    |
+| `core.parallel` | —                                                                                                                                                  | Выполняет цели `then` параллельно в изолированных ветках context и data.                                                |
+| `core.set`      | **`path`**, `value?`, `data?`                                                                                                                      | Записывает `value` во вложенный путь context; необязательный `data` объединяется с runtime data.                        |
+| `core.setData`  | **`path`**, `value?`, `data?`                                                                                                                      | **Устарело.** Записывает `value` в runtime data; в прикладном действии используйте `runtime.data.set(path, value)`.     |
+| `core.emit`     | **`type`**, `payload?`                                                                                                                             | Добавляет событие в результат запуска.                                                                                  |
+| `core.patch`    | **`patch`**                                                                                                                                        | Добавляет patch в результат запуска.                                                                                    |
+| `core.delay`    | `ms?`                                                                                                                                              | Ждёт указанное время или отмену запуска.                                                                                |
 
 Жирным отмечены обязательные props; `?` обозначает необязательные. Все имена в этой колонке являются полями объекта `props` стратегии.
 
 `core.loop` выполняет ветку `then` каждые `props.duration` миллисекунд до отмены запуска или завершения `props.max` итераций. Максимум по умолчанию — `999`: один из стандартных `maxStepCount: 1000` шагов расходуется на сам loop action. Значение `max: -1` отключает ограничение количества итераций, но не safety limits runner-а. Ноль, значения меньше `-1`, `NaN` и бесконечность заменяются значением по умолчанию. Если `props.immediate` равен `true`, первая итерация выполняется сразу, учитывается в `max` и не ждёт первого интервала. Пересекающиеся итерации пропускаются. При ошибке итерации выполняется `catch`; после успешного `catch` цикл продолжается.
 Вложенные стратегии `core.loop` запрещены, включая транзитивные ссылки через `then` или `catch`. Соседние циклы в отдельных ветках разрешены.
 
-Экшены могут выполнять собственные настроенные ветки через `runtime.executeThen()` и `runtime.executeCatch()`. `executeThen()` учитывает `mode` стратегии, поэтому управляющие экшены вроде `core.loop` могут компоноваться с выполнением `sequence`, `selector` и `parallel`, не обращаясь к внутренностям runner.
+Экшены могут выполнять собственные настроенные ветки через `runtime.executeThen()` и `runtime.executeCatch()`. `executeThen()` учитывает `mode` стратегии, поэтому управляющие экшены вроде `core.loop` могут компоноваться с выполнением `sequence`, `selector` и `parallel`, не обращаясь к внутренностям runner. `runtime.executeThen({ input })` выполняет ветку `then` с временно подменённым input — так `core.invoke` подставляет каждый элемент в `$input`.
 
 `core.set` записывает вложенное значение контекста через `runtime.set`. `core.setData` сохранён для совместимости; новые прикладные действия должны записывать временные данные цепочки через `runtime.data.set(path, value)`.
 
 `core.fetch` использует нативный `fetch` с signal текущего запуска. Свойство `response` выбирает `json`, `text`, `blob`, `arrayBuffer` или `none`; успешный ответ нормализуется в `{ status, ok, headers, body }` и может быть записан по `dataPath` или `contextPath`. `acceptStatuses` переопределяет стандартную проверку успеха через `Response.ok`. `credentials` принимает `include`, `same-origin` или `omit` и передаётся в нативный `fetch`. CORS, preflight-запросы, правила SameSite cookie и политика cookie сервера остаются ответственностью браузера и сервера. `retry` принимает `initialDelay`, `maxDelay`, `multiplier`, `jitter` и `maxAttempts`; `retryStatuses` переопределяет стандартный набор повторяемых статусов. По умолчанию выполняются две повторные попытки для сетевых ошибок и статусов `408`, `425`, `429` и `5xx`. Ошибки разбора response body не повторяются. Отменённый запрос или retry возвращает `skip`. Ретраи предназначены для body, который можно безопасно повторно отправить.
 
-`core.invoke` запускает `props.entrypoint` (резолвится по `entrypoints`) отдельным запуском, который разделяет текущий контекст и получает `props.input` как свой `input`. Если у стратегии объявлены `then` или `catch`, под-запуск ожидается, а его статус отображается на стратегию: `success` выполняет `then` в `mode` стратегии, `failed` выполняет `catch`, `skipped`/`stopped` проходят насквозь. При `success` data под-запуска мёржатся в data родителя, так что `then` читает их через `$data.*`. Если ни одна ветка не объявлена, `core.invoke` не ждёт под-запуск — это fire-and-forget, а его ошибки репортятся только через `onError`. Под-запуск наследует signal родителя и ограничен `maxSpawnDepth` (по умолчанию `8`, `-1` отключает), который считает вложенные `core.invoke` и падает с `MAX_SPAWN_DEPTH`; литеральный несуществующий target даёт предупреждение валидации `INVOKE_ENTRYPOINT_NOT_FOUND`.
+`core.invoke` перебирает `props.items` — значения массива или значения объекта в порядке вставки — и выполняет ветку `then` по разу на элемент в `mode` стратегии, подставляя элемент в `$input` на время итерации. Не-iterable `items` (всё, что не массив и не plain-объект) валит стратегию, чтобы сработал `catch`; пустая коллекция не выполняет ничего. Итерации последовательны, а падение одной итерации не останавливает цикл — обрабатывайте ошибки элемента через `catch` на leaf-стратегии или условием.
 
 ## Встроенные условия
 
@@ -289,16 +289,13 @@ type Runtime = {
   setData(path: string, value: unknown): void
   resolve(value: unknown): unknown
   signal: AbortSignal
-  executeThen(): Promise<RuntimeBranchResult>
+  executeThen(options?: { input?: unknown }): Promise<RuntimeBranchResult>
   executeCatch(): Promise<RuntimeBranchResult | undefined>
   emit(event: SlapEvent): void
   patch(patch: unknown): void
   stop(reason?: string): ActionStop<unknown>
   fail(reason?: string, data?: Record<string, unknown>): ActionFail
   enqueue?(entrypoint: string, input: Input, options: EnqueueOptions): Promise<void>
-  invoke?(entrypoint: string, input?: Input): Promise<RunResult<unknown, unknown>>
-  hasThen?: boolean
-  hasCatch?: boolean
 }
 ```
 
@@ -311,8 +308,6 @@ type Runtime = {
 Чтение и запись путей во время выполнения реализованы непосредственно через `objwalk`.
 
 `runtime.enqueue` доступен только когда `createFlow` сконфигурирован с `pools`/`workers`; иначе метод отсутствует. Он ставит запуск в именованный пул и резолвится в момент приёма задачи (не по её завершении). `options.pool` обязателен; `options.key` — уже вычисленный ключ линии (без резолва путей); `options.coalesceToken` помечает заменяемый сигнал. Ошибки постановки бросают `EnqueueError` с `slapError.code`: `ENQUEUE_UNKNOWN_POOL`, `ENQUEUE_SELF_POOL`, `ENQUEUE_KEY_INVALID` или `ENQUEUE_DRAINING`; runner превращает её в контролируемый `fail`.
-
-`runtime.invoke` запускает другой entrypoint отдельным запуском, разделяющим текущий контекст и signal, и резолвится `RunResult` этого запуска. Как и `runtime.enqueue`, метод опционален в типе `Runtime`, чтобы рукописные моки runtime оставались валидными; runtime, созданный runner-ом, всегда его предоставляет. `runtime.hasThen` и `runtime.hasCatch` сообщают, объявлены ли у текущей стратегии соответствующие ветки, — по ним `core.invoke` выбирает между ожиданием и fire-and-forget.
 
 ## Выражения
 
@@ -495,7 +490,7 @@ Guards существуют, чтобы критерий истинности ж
 - ссылки на guards (`GUARD_NOT_FOUND`, `GUARD_CYCLE`, `GUARD_INVALID`);
 - пуловые привязки в `start()`: `POOL_NOT_FOUND` (привязка ссылается на отсутствующий пул), `POOL_MODE_INVALID` (привязка ссылается на пул без `mode: 'workers'`), `POOL_WORKERS_INVALID` (пул без положительного целого `workers`), `WORKERS_REQUIRED` (приватный `workers`-пул без положительного `workers`), `KEY_INVALID` (декларативный `key`/`coalesce` не функция, не `$input.<path>` и не `$expression`) и `CONCURRENCY_GLOBAL_POOL` (глобальный `concurrency` задаёт `pool` или режим `workers` вместо per-binding).
 
-Предупреждения: `WORKERS_IGNORED` (`workers` без `mode: 'workers'`), `KEY_IGNORED` (декларативный `key` при не-`workers` режиме), `COALESCE_IGNORED` (`coalesce` при не-`workers` режиме), `POOL_FIELDS_IGNORED` (привязка дублирует `maxQueueSize`/`overflow`/`events`, уже заданные пулом), `CONTEXT_NOT_FACTORY` (пулы заданы, а `context` — общий объект, а не функция) и `INVOKE_ENTRYPOINT_NOT_FOUND` (литеральный target для `core.invoke` — объявленный в стратегии или переопределённый inline `props` в `then`/`catch` — не определён).
+Предупреждения: `WORKERS_IGNORED` (`workers` без `mode: 'workers'`), `KEY_IGNORED` (декларативный `key` при не-`workers` режиме), `COALESCE_IGNORED` (`coalesce` при не-`workers` режиме), `POOL_FIELDS_IGNORED` (привязка дублирует `maxQueueSize`/`overflow`/`events`, уже заданные пулом) и `CONTEXT_NOT_FACTORY` (пулы заданы, а `context` — общий объект, а не функция).
 
 ## Трассировка
 
@@ -722,10 +717,9 @@ bus.on('error', ({ parsed }) => {}) // { error }
 
 - `maxStepCount`: `1000`
 - `maxDepth`: `32`
-- `maxSpawnDepth`: `8`
 - `timeout`: `0`
 - `trace`: `false`
 
-Нарушения ограничений возвращаются как неуспешные результаты с кодами `MAX_STEPS`, `MAX_DEPTH`, `MAX_SPAWN_DEPTH` и `TIMEOUT`.
+Нарушения ограничений возвращаются как неуспешные результаты с кодами `MAX_STEPS`, `MAX_DEPTH` и `TIMEOUT`.
 
-Значение `-1` для `maxStepCount`, `maxDepth` или `maxSpawnDepth` отключает соответствующую проверку. Валидация возвращает предупреждение `LIMIT_DISABLED`, поскольку неограниченный запуск может выполняться бесконечно, а неограниченная вложенность — исчерпать стек вызовов. `maxSpawnDepth` ограничивает вложенные запуски `core.invoke` на границах запусков.
+Значение `-1` для `maxStepCount` или `maxDepth` отключает соответствующую проверку. Валидация возвращает предупреждение `LIMIT_DISABLED`, поскольку неограниченный запуск может выполняться бесконечно, а неограниченная вложенность — исчерпать стек вызовов.

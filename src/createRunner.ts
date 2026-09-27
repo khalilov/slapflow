@@ -40,7 +40,6 @@ export const createRunner = <TContext, TPatch = unknown>(
     'condition'
   )
   const configRef: { current?: Config } = {}
-  const runnerRef: { current?: Runner<TContext, TPatch> } = {}
   const mergeData = options.mergeData ?? ((current, next) => ({ ...current, ...next }))
   const variables = cloneRuntimeVariables(options.variables ?? {})
 
@@ -49,7 +48,6 @@ export const createRunner = <TContext, TPatch = unknown>(
     configRef,
     options: runnerOptions,
     mergeData,
-    runnerRef,
   }
 
   const registerAction = (name: string, action: Action<TContext, TPatch>): void => {
@@ -97,8 +95,6 @@ export const createRunner = <TContext, TPatch = unknown>(
       scheduler: schedulerRef?.current,
       pool: runOptions.pool,
       binding: runOptions.binding,
-      parentRunId: runOptions.parentRunId,
-      spawnDepth: runOptions.spawnDepth,
       traceSink,
     })
     const done = (result: Normalized<TContext, TPatch>): RunResult<TContext, TPatch> => {
@@ -141,8 +137,6 @@ export const createRunner = <TContext, TPatch = unknown>(
     run,
     runSync,
   }
-
-  runnerRef.current = runner
 
   return runner
 }

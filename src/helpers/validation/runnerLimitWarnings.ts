@@ -4,7 +4,6 @@ type RunnerLimitOptions = {
   maxStepCount?: number
   maxSteps?: number
   maxDepth?: number
-  maxSpawnDepth?: number
 }
 
 const limitWarning = (field: keyof RunnerLimitOptions, consequence: string): ValidationIssue => ({
@@ -22,9 +21,6 @@ export const runnerLimitWarnings = (options: RunnerLimitOptions): ValidationIssu
   }
   if (options.maxDepth === -1) {
     warnings.push(limitWarning('maxDepth', 'deeply nested strategies may exhaust the call stack'))
-  }
-  if (options.maxSpawnDepth === -1) {
-    warnings.push(limitWarning('maxSpawnDepth', 'recursive core.invoke runs may execute indefinitely'))
   }
 
   return warnings
