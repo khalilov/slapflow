@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- Deprecated `createWS` adapter and its `WS`, `WSOptions`, `WSRetryOptions`, `WSSocket`, and `WSStatus` types. Use `createWebSocket` instead.
+
 ## [1.5.1] - 27.09.2026
 
 ### Added

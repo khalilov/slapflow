@@ -147,14 +147,6 @@ export type Bus<TEvents extends object = EventMap> = {
   dispatch(event: unknown): BusEvent | undefined
 }
 
-export type WSSocket = {
-  readyState: number
-  send(data: string): void
-  close(): void
-  addEventListener(type: 'open' | 'close' | 'error' | 'message', listener: EventListener): void
-  removeEventListener(type: 'open' | 'close' | 'error' | 'message', listener: EventListener): void
-}
-
 export type RetryOptions = {
   initialDelay?: number
   maxDelay?: number
@@ -163,27 +155,7 @@ export type RetryOptions = {
   maxAttempts?: number
 }
 
-export type WSRetryOptions = RetryOptions
-
-export type WSOptions<TEvents extends object = EventMap> = {
-  bus: Bus<TEvents>
-  createSocket: () => WSSocket
-  inboundTopics?: (EventName<TEvents> | EventPattern)[]
-  outboundTopics?: (EventName<TEvents> | EventPattern)[]
-  origin?: string
-  retry?: WSRetryOptions
-}
-
-export type WSStatus = 'idle' | 'connecting' | 'connected' | 'retrying' | 'stopped'
-
 export type FetchResponseType = 'json' | 'text' | 'blob' | 'arrayBuffer' | 'none'
-
-export type WS = {
-  start(): void
-  stop(): void
-  reconnect(): void
-  status(): WSStatus
-}
 
 export type SocketEventTopic = 'open' | 'message' | 'close' | 'error'
 

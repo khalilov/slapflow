@@ -709,8 +709,6 @@ bus.on('error', ({ parsed }) => {}) // { error }
 
 События сокета приходят с темой `open`, `message`, `close` или `error`. Полезная нагрузка `message` JSON-декодируется в `parsed`, если валидна, иначе остаётся сырой строкой. Фильтрация тем — забота потребителя: внутри клиента ничего не разрешается и не отклоняется. `reconnect` принимает `initialDelay`, `maxDelay`, `multiplier`, `jitter` и `maxAttempts`; без `maxAttempts` повторы идут бесконечно. `start`, `stop`, `reconnect` и `status` управляют жизненным циклом; статус — одно из `idle`, `connecting`, `connected`, `reconnecting` или `stopped`.
 
-`createWS` помечен как deprecated и будет удалён; мигрируйте на `createWebSocket`.
-
 ## Ограничения безопасности
 
 Значения по умолчанию:

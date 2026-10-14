@@ -709,8 +709,6 @@ bus.on('error', ({ parsed }) => {}) // { error }
 
 Socket events are forwarded with the topic `open`, `message`, `close`, or `error`. `message` payloads are JSON-decoded into `parsed` when valid, otherwise kept as the raw string. Filtering topics is the consumer's responsibility — nothing is allow-listed or rejected inside the client. `reconnect` accepts `initialDelay`, `maxDelay`, `multiplier`, `jitter`, and `maxAttempts`; omitting `maxAttempts` retries indefinitely. `start`, `stop`, `reconnect`, and `status` manage the lifecycle; status is one of `idle`, `connecting`, `connected`, `reconnecting`, or `stopped`.
 
-`createWS` is deprecated and will be removed; migrate to `createWebSocket`.
-
 ## Safety Limits
 
 Defaults:

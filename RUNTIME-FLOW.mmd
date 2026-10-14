@@ -1,9 +1,8 @@
 flowchart LR
   DOM["DOM event"] --> Slapflow["Slapflow binding"]
   SYNTHETIC["Synthetic event<br/>API, timer, worker"] --> BUS["PubSubBehavior"]
-  TRANSPORT["WebSocket transport"] --> WS["WebSocket bridge"]
+  TRANSPORT["WebSocket transport"] --> WS["createWebSocket"]
   WS --> BUS
-  BUS --> WS
   WS --> TRANSPORT
   BUS --> Slapflow
 

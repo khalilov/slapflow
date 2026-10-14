@@ -3,7 +3,6 @@ export { createMemoryTraceSink } from '~/helpers/trace/createMemoryTraceSink'
 export { defineErrorReporter } from '~/helpers/errors/defineErrorReporter'
 export { createPubSub, PubSub } from '~/createPubSub'
 export { createFlow } from '~/createFlow'
-export { createWS } from '~/createWS'
 export { createWebSocket } from '~/createWebSocket'
 export { catchError } from '~/helpers/catchError'
 export { EnqueueError } from '~/helpers/errors/EnqueueError'
@@ -77,11 +76,6 @@ export {
   type ValidationResult,
   type Variables,
   type VariableValue,
-  type WS,
-  type WSOptions,
-  type WSRetryOptions,
-  type WSSocket,
-  type WSStatus,
   type SocketEventTopic,
   type WebSocketOptions,
   type WebSocketStatus,
