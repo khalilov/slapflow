@@ -251,35 +251,8 @@ describe('runner', () => {
     assert.equal(calls, 3)
   })
 
-  it('core.loop uses the default maximum when max is absent', async () => {
-    vi.useFakeTimers()
-
-    try {
-      const runner = createRunner<Ctx>({ maxStepCount: -1 })
-      let calls = 0
-
-      runner.registerAction('tick', () => {
-        calls += 1
-      })
-      runner.loadConfig({
-        strategies: {
-          root: { fn: 'core.loop', props: { duration: 1, immediate: true }, then: ['tick'] },
-          tick: { fn: 'tick' },
-        },
-      })
-
-      const resultPromise = runner.run('root', {})
-      await vi.advanceTimersByTimeAsync(999)
-      const result = await resultPromise
-
-      assert.equal(result.status, 'success')
-      assert.equal(calls, 999)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it.each([
+    ['absent', undefined],
     ['zero', 0],
     ['less than -1', -2],
     ['NaN', Number.NaN],
@@ -290,23 +263,28 @@ describe('runner', () => {
     try {
       const runner = createRunner<Ctx>({ maxStepCount: -1 })
       let calls = 0
+      let resultPromise: ReturnType<typeof runner.run>
 
       runner.registerAction('tick', () => {
         calls += 1
       })
       runner.loadConfig({
         strategies: {
-          root: { fn: 'core.loop', props: { duration: 1, immediate: true, max }, then: ['tick'] },
+          root: {
+            fn: 'core.loop',
+            props: { duration: 1, immediate: true, ...(max === undefined ? {} : { max }) },
+            then: ['tick'],
+          },
           tick: { fn: 'tick' },
         },
       })
 
-      const resultPromise = runner.run('root', {})
+      resultPromise = runner.run('root', {})
       await vi.advanceTimersByTimeAsync(999)
-      const result = await resultPromise
-
-      assert.equal(result.status, 'success')
-      assert.equal(calls, 999)
+      await resultPromise.then((result) => {
+        assert.equal(result.status, 'success')
+        assert.equal(calls, 999)
+      })
     } finally {
       vi.useRealTimers()
     }

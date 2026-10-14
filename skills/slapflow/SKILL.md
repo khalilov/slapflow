@@ -186,6 +186,25 @@ use for props fallback: `{ $expression: ['coalesce', '$input.sessionId', '$data.
 Custom operators can be registered via `expressions` in runner options. `$expression` args are recursively resolved, so
 nested refs like `$data.key` or another `$expression` work.
 
+## Standalone evaluation
+
+Use the root exports `evaluateCondition` and `evaluateExpression` to evaluate individual JSON expressions without a flow or runner:
+
+```ts
+import { evaluateCondition, evaluateExpression } from 'slapflow'
+
+const condition = evaluateCondition(guards['cargo.hit'], { context: character })
+const duration = evaluateExpression(['multiply', '$context.attackDuration', 1000], { context: character })
+```
+
+Both are synchronous and accept `expression: unknown`. Scope requires `context`; optional `input`, `data`, and `variables` default to empty objects. Nested `$expression`, `$template`, and scoped references work as in the runner. The expression helper takes the operator array directly. Pass custom handlers through the third argument: `{ conditions, expressions }` for conditions, `{ expressions }` for expressions. Built-ins are available by default and cannot be replaced; no flow settings are inherited.
+
+Results: `ConditionOutcome` is `{ ok: true, matched: boolean, ensure?: true } | { ok: false, error: SlapError }`; `ExpressionOutcome` is `{ ok: true, value: unknown } | { ok: false, error: SlapError }`. Errors are distinct from an ordinary non-match. Condition expressions are validated before evaluation; `and`/`or` short-circuit during evaluation. Root `ensure` only marks a mismatch, without running `catch`. Pass the guard expression itself; `['guard', name]` is not expanded.
+
+Custom conditions keep the existing `ConditionFn` runtime contract and receive the original context/input/data objects. Their `runtime.data.set` writes affect the caller's data.
+
+The runner uses these same public helpers. A condition record adds custom conditions to built-ins; a supplied `Map` represents a complete condition registry and is reused without copying. Optional scope `runtime`, `strategy`, and `configPath` support runtime reuse and diagnostic paths.
+
 ## Creating and running a flow
 
 ```ts

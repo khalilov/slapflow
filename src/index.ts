@@ -4,6 +4,8 @@ export { defineErrorReporter } from '~/helpers/errors/defineErrorReporter'
 export { createPubSub, PubSub } from '~/createPubSub'
 export { createFlow } from '~/createFlow'
 export { createWebSocket } from '~/createWebSocket'
+export { evaluateCondition } from '~/evaluateCondition'
+export { evaluateExpression } from '~/evaluateExpression'
 export { catchError } from '~/helpers/catchError'
 export { EnqueueError } from '~/helpers/errors/EnqueueError'
 export { PoolError } from '~/helpers/errors/PoolError'
@@ -18,7 +20,9 @@ export {
   type ActionStop,
   type ActionSuccess,
   type ConditionExpression,
+  type ConditionEvaluationOptions,
   type ConditionFn,
+  type ConditionOutcome,
   type ConcurrencyKey,
   type ConcurrencyMode,
   type ConcurrencyOptions,
@@ -53,7 +57,10 @@ export {
   type EventMap,
   type EventName,
   type EventPattern,
+  type EvaluationScope,
+  type ExpressionEvaluationOptions,
   type ExpressionOperator,
+  type ExpressionOutcome,
   type FetchResponseType,
   type InactiveBinding,
   type Input,

@@ -1,10 +1,9 @@
-import { pick, set } from 'objwalk'
+import { set } from 'objwalk'
 import { type EnqueueOptions, type Input, type Runtime, type RuntimeBranchResult } from '~/types'
 import { type RunState } from '~/helpers/runner/runnerTypes'
 import { EnqueueError } from '~/helpers/errors/EnqueueError'
-import { resolveValue } from '~/helpers/path/resolveValue'
+import { createEvaluationRuntime } from '~/helpers/path/createEvaluationRuntime'
 import { stopResult } from '~/helpers/runner/stopResult'
-import { protectedPickOptions } from '~/helpers/path/protectedPickOptions'
 
 type RuntimeBranches = {
   executeThen(options?: { input?: unknown }): Promise<RuntimeBranchResult>
@@ -18,14 +17,7 @@ export const createRuntime = <TContext, TPatch>(
     executeCatch: async () => undefined,
   }
 ): Runtime => {
-  const data = {
-    get: (path: string) => pick(state.data, path),
-    set: (path: string, value: unknown) => {
-      if (!state.closed) {
-        set(state.data, path, value)
-      }
-    },
-  }
+  const runtime = createEvaluationRuntime(state)
   const scheduler = state.scheduler
   const currentPool = state.pool
   const enqueue = scheduler
@@ -47,36 +39,27 @@ export const createRuntime = <TContext, TPatch>(
     : undefined
 
   return {
-    get: (path) => pick(state.context as Record<string, unknown>, path),
+    ...runtime,
     set: (path, value) => {
-      if (!state.closed) {
+      if (state.closed === false) {
         set(state.context as Record<string, unknown>, path, value)
       }
     },
-    data,
-    variables: {
-      get: (path: string) => pick(state.variables, path, protectedPickOptions),
-    },
-    getData: (path) => {
-      console.warn('runtime.getData() is deprecated; use runtime.data.get() instead')
-      return data.get(path)
-    },
     setData: (path, value) => {
       console.warn('runtime.setData() is deprecated; use runtime.data.set() instead')
-      data.set(path, value)
+      runtime.data.set(path, value)
     },
-    resolve: (value) => resolveValue(value, state),
     signal: state.signal,
     executeThen: async (options) =>
       state.closed ? { status: 'stopped', reason: 'Run is already finished' } : branches.executeThen(options),
     executeCatch: async () => (state.closed ? undefined : branches.executeCatch()),
     emit: (event) => {
-      if (!state.closed) {
+      if (state.closed === false) {
         state.events.push(event)
       }
     },
     patch: (patch) => {
-      if (!state.closed) {
+      if (state.closed === false) {
         state.patches.push(patch as TPatch)
       }
     },

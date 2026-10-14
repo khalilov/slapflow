@@ -1,50 +1,13 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { BUILTIN_CONDITIONS } from '~/helpers/conditions'
-import { includesCondition } from '~/helpers/conditions/includesCondition'
-import { sizeOf } from '~/helpers/conditions/sizeOf'
-import { evaluateCondition } from '~/helpers/runner/evaluateCondition'
-import { createRuntime } from '~/helpers/runner/createRuntime'
-import { type RunState } from '~/helpers/runner/runnerTypes'
+import { evaluateCondition } from '~/evaluateCondition'
 
-type Ctx = {
-  count?: number
-  nested?: {
-    value?: string
-    items?: string[]
-  }
-  previous?: number
-  now?: number
-}
-
-const createScope = (context: Ctx = {}, data: Record<string, unknown> = {}) => {
-  const state: RunState<Ctx, string> = {
-    context,
-    input: { target: 'alpha' },
-    data,
-    patches: [],
-    events: [],
-    stepCounter: { current: 0 },
-    startedAt: Date.now(),
-    sync: false,
-    signal: new AbortController().signal,
-    abort: () => undefined,
-    closed: false,
-    reportedErrors: [],
-    variables: {},
-    expressions: {},
-  }
-
-  return {
-    context: state.context,
-    input: state.input,
-    data: state.data,
-    runtime: createRuntime(state),
-  }
-}
-
-const assertMatches = (expression: Parameters<typeof evaluateCondition<Ctx>>[0], expected: boolean): void => {
-  const result = evaluateCondition(expression, new Map(BUILTIN_CONDITIONS), createScope())
+const assertMatches = (
+  expression: Parameters<typeof evaluateCondition>[0],
+  expected: boolean,
+  context: Record<string, unknown> = {}
+): void => {
+  const result = evaluateCondition(expression, { context })
 
   assert.deepEqual(result, { ok: true, matched: expected })
 }
@@ -78,15 +41,15 @@ describe('built-in conditions', () => {
     assertMatches(['notEmpty', ['x']], true)
     assertMatches(['notEmpty', 'x'], true)
     assertMatches(['notEmpty', { x: 1 }], true)
-    assert.equal(sizeOf(new Set()), 0)
-    assert.equal(sizeOf(new Map([['x', 1]])), 1)
+    assertMatches(['empty', '$context.items'], true, { items: new Set() })
+    assertMatches(['notEmpty', '$context.items'], true, { items: new Map([['x', 1]]) })
   })
 
   it('evaluates includes, changed and cooldownReady operators', () => {
     assertMatches(['includes', ['a', 'b'], 'b'], true)
     assertMatches(['includes', 'alpha', 'ph'], true)
     assertMatches(['includes', { a: true }, 'a'], false)
-    assert.equal(includesCondition({}, new Set(['a']), 'a'), true)
+    assertMatches(['includes', '$context.items', 'a'], true, { items: new Set(['a']) })
     assertMatches(['changed', 1, 2], true)
     assertMatches(['changed', 1, 1], false)
     assertMatches(['cooldownReady', 100, undefined, 50], true)
@@ -110,11 +73,11 @@ describe('built-in conditions', () => {
   })
 
   it('resolves path references before condition execution', () => {
-    const result = evaluateCondition(
-      ['and', ['eq', '$context.count', 2], ['eq', '$data.selected', '$input.target']],
-      new Map(BUILTIN_CONDITIONS),
-      createScope({ count: 2 }, { selected: 'alpha' })
-    )
+    const result = evaluateCondition(['and', ['eq', '$context.count', 2], ['eq', '$data.selected', '$input.target']], {
+      context: { count: 2 },
+      data: { selected: 'alpha' },
+      input: { target: 'alpha' },
+    })
 
     assert.deepEqual(result, { ok: true, matched: true })
   })
@@ -125,23 +88,5 @@ describe('built-in conditions', () => {
     assertMatches(['or', false, ['eq', 1, 2], ['eq', 1, 1]], true)
     assertMatches(['or', false, ['eq', 1, 2]], false)
     assertMatches(['not', ['truthy', 'x']], false)
-  })
-
-  it('returns an error for unknown condition operators', () => {
-    const result = evaluateCondition(['unknown'], new Map(BUILTIN_CONDITIONS), createScope())
-
-    assert.equal(result.ok, false)
-    if (!result.ok) {
-      assert.equal(result.error.code, 'CONDITION_NOT_FOUND')
-    }
-  })
-
-  it('uses a valid error path when strategy is omitted', () => {
-    const result = evaluateCondition(['eq', '$variables.MISSING', 1], new Map(BUILTIN_CONDITIONS), createScope())
-
-    assert.equal(result.ok, false)
-    if (!result.ok) {
-      assert.equal(result.error.path, 'when[1]')
-    }
   })
 })

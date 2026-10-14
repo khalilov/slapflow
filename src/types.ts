@@ -33,6 +33,28 @@ export type Next =
 
 export type ConditionExpression = boolean | [operator: string, ...args: unknown[]] | ['guard', name: string]
 
+export type EvaluationScope<TContext> = {
+  context: TContext
+  input?: Input
+  data?: Record<string, unknown>
+  variables?: Variables
+  runtime?: Pick<Runtime, 'resolve' | 'get' | 'data' | 'variables'>
+  strategy?: string
+  configPath?: string
+}
+
+export type ExpressionEvaluationOptions = {
+  expressions?: Record<string, ExpressionOperator>
+}
+
+export type ConditionEvaluationOptions<TContext> = ExpressionEvaluationOptions & {
+  conditions?: Record<string, ConditionFn<TContext>> | Map<string, ConditionFn<TContext>>
+}
+
+export type ConditionOutcome = { ok: true; matched: boolean; ensure?: true } | { ok: false; error: SlapError }
+
+export type ExpressionOutcome = { ok: true; value: unknown } | { ok: false; error: SlapError }
+
 export type Action<TContext, TPatch = unknown> = (
   args: ActionArgs<TContext>
 ) => ActionResult<TContext, TPatch> | Promise<ActionResult<TContext, TPatch>>
@@ -399,8 +421,6 @@ export type Runtime = {
   variables?: {
     get(path: string): unknown
   }
-  /** @deprecated Use `runtime.data.get(path)` instead. */
-  getData(path: string): unknown
   /** @deprecated Use `runtime.data.set(path, value)` instead. */
   setData(path: string, value: unknown): void
   resolve(value: unknown): unknown
@@ -520,7 +540,7 @@ export type ConditionFn<TContext> = (
     context: TContext
     input: Input
     data: Record<string, unknown>
-    runtime: Pick<Runtime, 'resolve' | 'get' | 'data' | 'variables' | 'getData'>
+    runtime: Pick<Runtime, 'resolve' | 'get' | 'data' | 'variables'>
   },
   ...conditionArgs: unknown[]
 ) => boolean

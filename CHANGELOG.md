@@ -5,10 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0]
+
+### Added
+
+- Standalone `evaluateCondition` and `evaluateExpression` helpers with explicit scope, built-in and custom handlers, and structured success/error results. Exported `EvaluationScope`, `ConditionEvaluationOptions`, `ExpressionEvaluationOptions`, `ConditionOutcome`, and `ExpressionOutcome` types.
+
+### Fixed
+
+- Condition validation rejects `not` expressions without exactly one operand.
 
 ### Removed
 
+- Deprecated `runtime.getData`; use `runtime.data.get` instead.
 - Deprecated `createWS` adapter and its `WS`, `WSOptions`, `WSRetryOptions`, `WSSocket`, and `WSStatus` types. Use `createWebSocket` instead.
 
 ## [1.5.1] - 27.09.2026

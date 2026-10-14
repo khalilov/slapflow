@@ -88,37 +88,6 @@ describe('runtime variables and expressions', () => {
     assert.equal(result.error?.path, 'strategies.root.props.value')
   })
 
-  it('resolves escaped template delimiters and backslashes', async () => {
-    const { received } = await runProps(
-      {
-        escapedVariable: { $template: '\\${NAME}' },
-        escapedData: { $template: '\\{{ user.name }}' },
-        evenSlashes: { $template: '\\\\${NAME}' },
-        oddSlashes: { $template: '\\\\\\${NAME}' },
-        mixed: { $template: '${NAME} \\${NAME}' },
-        escapedBroken: { $template: '\\${BROKEN' },
-        unknownEscape: { $template: '\\x' },
-        backslash: { $template: '\\\\' },
-        empty: { $template: '' },
-        multiple: { $template: '\\${A} ${NAME} \\{{ user.name }} {{ user.name }}' },
-      },
-      { variables: { NAME: 'Ada' } }
-    )
-
-    assert.deepEqual(received, {
-      escapedVariable: '${NAME}',
-      escapedData: '{{ user.name }}',
-      evenSlashes: '\\Ada',
-      oddSlashes: '\\${NAME}',
-      mixed: 'Ada ${NAME}',
-      escapedBroken: '${BROKEN',
-      unknownEscape: '\\x',
-      backslash: '\\',
-      empty: '',
-      multiple: '${A} Ada {{ user.name }} ',
-    })
-  })
-
   it('evaluates every arithmetic and numeric built-in', async () => {
     const expression = (operator: string, ...args: unknown[]) => ({ $expression: [operator, ...args] })
 
@@ -191,21 +160,12 @@ describe('runtime variables and expressions', () => {
     assert.deepEqual(received, { fromInput: 'value', emptyKept: '', allMissing: undefined })
   })
 
-  it('returns typed expression failures', async () => {
-    const cases: Array<[Props, string]> = [
-      [{ value: { $expression: ['coalesce'] } }, 'EXPRESSION_INVALID_ARGUMENT'],
-      [{ value: { $expression: ['add', '1', 2] } }, 'EXPRESSION_INVALID_ARGUMENT'],
-      [{ value: { $expression: ['at', ['a'], 0, 'unexpected'] } }, 'EXPRESSION_INVALID_ARGUMENT'],
-      [{ value: { $expression: ['divide', 1, 0] } }, 'EXPRESSION_DIVISION_BY_ZERO'],
-      [{ value: { $expression: ['missing', 1] } }, 'EXPRESSION_OPERATOR_NOT_FOUND'],
-      [{ value: { $expression: ['at', [], 0] } }, 'EXPRESSION_PATH_NOT_FOUND'],
-    ]
-    for (const [props, code] of cases) {
-      const { result } = await runProps(props)
-      assert.equal(result.error?.code, code)
-      assert.equal(result.error?.strategy, 'root')
-      assert.equal(result.error?.path, 'strategies.root.props.value')
-    }
+  it('attributes expression failures to the strategy and props path', async () => {
+    const { result } = await runProps({ value: { $expression: ['divide', 1, 0] } })
+
+    assert.equal(result.error?.code, 'EXPRESSION_DIVISION_BY_ZERO')
+    assert.equal(result.error?.strategy, 'root')
+    assert.equal(result.error?.path, 'strategies.root.props.value')
   })
 
   it('registers custom operators', async () => {

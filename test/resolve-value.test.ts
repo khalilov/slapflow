@@ -12,7 +12,7 @@ const scope: ResolveScope<Context> = {
   context: { user: { name: 'Ada' } },
   data: { count: 2, items: ['a', 'b'] },
   input: { id: 'job-1' },
-  variables: { SECRET: 's3cr3t' },
+  variables: { SECRET: 's3cr3t', NAME: 'Ada' },
   expressions: { double: (args) => Number(args[0]) * 2 },
 }
 
@@ -45,7 +45,7 @@ describe('resolveValue', () => {
   })
 
   it('resolves variables and fails when one is missing', () => {
-    assert.deepEqual(resolveValue('$variables', scope), { SECRET: 's3cr3t' })
+    assert.deepEqual(resolveValue('$variables', scope), scope.variables)
     assert.equal(resolveValue('$variables.SECRET', scope), 's3cr3t')
     assert.equal(
       codeOf(() => resolveValue('$variables.MISSING', scope)),
@@ -78,6 +78,25 @@ describe('resolveValue', () => {
 
   it('ignores sibling keys when $template is present', () => {
     assert.equal(resolveValue({ $template: 'Hi {{ context.user.name }}', count: '$data.count' }, scope), 'Hi Ada')
+  })
+
+  it('resolves escaped template delimiters and backslashes', () => {
+    const cases = [
+      ['\\${NAME}', '${NAME}'],
+      ['\\{{ user.name }}', '{{ user.name }}'],
+      ['\\\\${NAME}', '\\Ada'],
+      ['\\\\\\${NAME}', '\\${NAME}'],
+      ['${NAME} \\${NAME}', 'Ada ${NAME}'],
+      ['\\${BROKEN', '${BROKEN'],
+      ['\\x', '\\x'],
+      ['\\\\', '\\'],
+      ['', ''],
+      ['\\${A} ${NAME} \\{{ user.name }} {{ user.name }}', '${A} Ada {{ user.name }} '],
+    ]
+
+    for (const [template, value] of cases) {
+      assert.equal(resolveValue({ $template: template }, scope), value)
+    }
   })
 
   it('resolves nested objects and arrays recursively', () => {

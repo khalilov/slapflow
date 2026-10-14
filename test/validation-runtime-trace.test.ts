@@ -205,8 +205,16 @@ describe('runtime helpers', () => {
 
     assert.equal(runtime.get('user.name'), 'Ada')
     assert.equal(runtime.get('user.profile.title'), 'Engineer')
+    assert.equal(runtime.get(''), state.context)
+    assert.equal(runtime.get('user{name}'), 'Ada')
+    assert.deepEqual(runtime.get('user{name,profile}'), { name: 'Ada', profile: { title: 'Engineer' } })
+    assert.deepEqual(runtime.get('user{*}'), ['name', 'profile'])
     assert.deepEqual(state.context, { user: { name: 'Ada', profile: { title: 'Engineer' } } })
     assert.equal(runtime.data.get('job.id'), 'job-1')
+    runtime.data.set('jobs[1].id', 'job-2')
+    assert.equal(runtime.data.get('jobs.length'), 2)
+    assert.equal(runtime.data.get('jobs[1].id'), 'job-2')
+    assert.equal(runtime.data.get('jobs[0].id'), undefined)
     assert.deepEqual(state.events, [{ type: 'job.selected', payload: 'job-1' }])
     assert.deepEqual(state.patches, ['patch-1'])
     assert.deepEqual(runtime.stop('done'), { type: 'stop', reason: 'done' })
@@ -215,9 +223,16 @@ describe('runtime helpers', () => {
       reason: 'failed',
       data: { id: 'job-1' },
     })
+    state.context = { user: { name: 'Grace' } }
+    state.data = { count: 2 }
+    assert.equal(runtime.get('user.name'), 'Grace')
+    assert.equal(runtime.data.get('count'), 2)
+    state.closed = true
+    runtime.data.set('count', 3)
+    assert.equal(runtime.data.get('count'), 2)
   })
 
-  it('keeps deprecated runtime data methods with warnings', () => {
+  it('keeps deprecated runtime setData with a warning and removes getData', () => {
     const state: RunState<Ctx, string> = {
       context: { user: { name: 'Ada' } },
       input: {},
@@ -239,9 +254,10 @@ describe('runtime helpers', () => {
 
     runtime.setData('job.id', 'job-1')
 
-    assert.equal(runtime.getData('job.id'), 'job-1')
+    assert.equal(runtime.data.get('job.id'), 'job-1')
+    assert.equal(Object.hasOwn(runtime, 'getData'), false)
     expect(warn).toHaveBeenNthCalledWith(1, 'runtime.setData() is deprecated; use runtime.data.set() instead')
-    expect(warn).toHaveBeenNthCalledWith(2, 'runtime.getData() is deprecated; use runtime.data.get() instead')
+    expect(warn).toHaveBeenCalledTimes(1)
     warn.mockRestore()
   })
 })

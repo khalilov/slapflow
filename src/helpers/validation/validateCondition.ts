@@ -39,7 +39,16 @@ export const validateCondition = (
     return
   }
   if (operator === 'not') {
-    validateCondition(args[0], strategy, `${path}.1`, conditionsRegistry, errors)
+    if (args.length === 1) {
+      validateCondition(args[0], strategy, `${path}.1`, conditionsRegistry, errors)
+    } else {
+      errors.push({
+        code: 'CONDITION_INVALID',
+        message: 'not requires exactly one condition expression',
+        strategy,
+        path,
+      })
+    }
     return
   }
   if (operator === 'ensure') {

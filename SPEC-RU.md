@@ -20,6 +20,8 @@ import {
   PubSub,
   createFlow,
   createWebSocket,
+  evaluateCondition,
+  evaluateExpression,
   catchError,
   EnqueueError,
   PoolError,
@@ -36,6 +38,52 @@ runner.registerCondition('hasQueue', ({ context }) => context.queue.length > 0)
 runner.loadConfig(config)
 const result = await runner.run('worker.tick', context, input)
 ```
+
+### Самостоятельное вычисление
+
+`evaluateCondition(expression, scope, options?)` и `evaluateExpression(expression, scope, options?)` — синхронные хелперы, работающие без создания или запуска flow и runner. Оба принимают JSON-структуры выражений как `unknown` и используют общий с runner вычислитель условий и резолвер значений.
+
+```ts
+const context = { visible: true, now: 1500, effectAt: 1000, attackDuration: 0.5 }
+const condition = evaluateCondition(
+  [
+    'and',
+    ['eq', '$context.visible', true],
+    [
+      'cooldownReady',
+      '$context.now',
+      '$context.effectAt',
+      { $expression: ['multiply', '$context.attackDuration', 1000] },
+    ],
+  ],
+  { context }
+)
+const duration = evaluateExpression(['multiply', '$context.attackDuration', 1000], { context })
+// condition: { ok: true, matched: true }
+// duration: { ok: true, value: 500 }
+```
+
+`EvaluationScope<TContext>` требует `context`; необязательные `input`, `data` и `variables` по умолчанию равны пустым объектам. Ссылки, вложенные `$expression` и `$template` используют эти явно переданные источники. Конфиг flow и зарегистрированные обработчики автоматически не подхватываются.
+
+`ConditionEvaluationOptions<TContext>` принимает `conditions` и `expressions`; `ExpressionEvaluationOptions` принимает `expressions`. Встроенные обработчики доступны сразу и не могут быть заменены. Пользовательские обработчики используют существующие контракты `ConditionFn<TContext>` и `ExpressionOperator`:
+
+Runner вызывает эти же хелперы, передавая полный registry условий как `Map` (он используется без копирования), обработчики выражений и свой runtime. Снаружи можно по-прежнему передавать объект пользовательских conditions — встроенные добавляются автоматически. Переданный `Map` является полным registry, включая встроенные условия. Необязательные поля scope `runtime`, `strategy` и `configPath` позволяют переиспользовать runtime и указать источник ошибки; самостоятельному вычислению они не нужны.
+
+```ts
+const result = evaluateExpression(
+  ['double', '$input.amount'],
+  { context: {}, input: { amount: 3 } },
+  {
+    expressions: { double: ([value]) => Number(value) * 2 },
+  }
+)
+```
+
+Результаты — `ConditionOutcome` (`{ ok: true, matched: boolean, ensure?: true } | { ok: false, error: SlapError }`) и `ExpressionOutcome` (`{ ok: true, value: unknown } | { ok: false, error: SlapError }`). Неверный ввод, ошибки резолвинга, неизвестные операторы и исключения обработчиков возвращают `ok: false`; несовпадение условия возвращает `ok: true, matched: false`. Сообщения исключений пользовательских обработчиков в результат ошибки не включаются.
+
+Передавайте отдельное выражение guard, например `config.guards['cargo.hit']`; ссылки `['guard', name]` не раскрываются. Условия сохраняют короткое замыкание `and`/`or` после валидации. Поддерживаются boolean-условия и отсутствующее (`undefined`) условие; отсутствующее условие считается совпавшим. Несовпадение корневого `ensure` возвращает `ensure: true` без выполнения ветки catch. `evaluateExpression` принимает непосредственно массив с оператором, а не корневой объект `{ $expression: ... }`.
+
+Встроенное вычисление не изменяет переданные данные. Пользовательские conditions получают исходные объекты `context`, `input`, `data` и runtime с `get`, `data.get/set`, `variables.get`, `resolve`; их изменения `data` остаются видимыми вызывающему коду.
 
 ## Основные типы
 
@@ -283,8 +331,6 @@ type Runtime = {
   variables?: {
     get(path: string): unknown
   }
-  /** @deprecated Используйте runtime.data.get(path). */
-  getData(path: string): unknown
   /** @deprecated Используйте runtime.data.set(path, value). */
   setData(path: string, value: unknown): void
   resolve(value: unknown): unknown
@@ -301,7 +347,7 @@ type Runtime = {
 
 `runtime.get` и `runtime.set` читают и записывают вложенные значения контекста. `runtime.data.get` и `runtime.data.set` читают и записывают временные данные цепочки.
 
-`runtime.getData` и `runtime.setData` сохранены как устаревшие алиасы для совместимости и при вызове выводят предупреждение в консоль.
+`runtime.setData` сохранён как устаревший алиас для совместимости и при вызове выводит предупреждение в консоль.
 
 `runtime.variables.get` читает неизменяемые runtime-переменные. `runtime.resolve` разрешает ссылки `$context.*`, `$data.*`, `$input.*` и неизменяемые значения `$variables.*`. Он также рекурсивно вычисляет объекты `$expression` и `$template`, используя операторы выражений, зарегистрированные в опциях runner. В `$template` для совместимости `{{ path }}` читает runtime data; `{{ data.path }}`, `{{ context.path }}` и `{{ input.path }}` явно выбирают источник.
 

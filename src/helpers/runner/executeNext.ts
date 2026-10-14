@@ -1,5 +1,5 @@
 import { type Next } from '~/types'
-import { evaluateCondition } from '~/helpers/runner/evaluateCondition'
+import { evaluateCondition } from '~/evaluateCondition'
 import { createRuntime } from '~/helpers/runner/createRuntime'
 import { executeStrategy } from '~/helpers/runner/executeStrategy'
 import { type Normalized, type RunState, type RunnerEnvironment } from '~/helpers/runner/runnerTypes'
@@ -14,7 +14,14 @@ export const executeNext = <TContext, TPatch>(
 
   if (typeof item !== 'string' && item.when) {
     const runtime = createRuntime(state)
-    const condition = evaluateCondition(item.when, environment.registry.conditions, { ...state, runtime, strategy: id })
+    const condition = evaluateCondition(
+      item.when,
+      { ...state, runtime, strategy: id },
+      {
+        conditions: environment.registry.conditions,
+        expressions: state.expressions,
+      }
+    )
 
     if (!condition.ok) {
       return { status: 'failed', error: condition.error, patches: [], events: [] }

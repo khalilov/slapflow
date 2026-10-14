@@ -1,6 +1,7 @@
 import { type ResolveScope } from '~/helpers/path/resolveScope'
 import { childPath } from '~/helpers/path/childPath'
-import { resolveExpressionValue } from '~/helpers/path/resolveExpressionValue'
+import { evaluateExpression } from '~/evaluateExpression'
+import { ResolutionError } from '~/helpers/path/ResolutionError'
 import { resolveNestedObject } from '~/helpers/path/resolveNestedObject'
 import { resolvePathReference } from '~/helpers/path/resolvePathReference'
 import { resolveTemplateValue } from '~/helpers/path/resolveTemplateValue'
@@ -22,7 +23,17 @@ export const resolveValue = <TContext>(
     return value
   }
   if (Object.prototype.hasOwnProperty.call(value, '$expression')) {
-    return resolveExpressionValue(value.$expression, scope, path, resolveValue)
+    const result = evaluateExpression(
+      value.$expression,
+      { ...scope, configPath: path },
+      { expressions: scope.expressions ?? {} }
+    )
+
+    if (result.ok) {
+      return result.value
+    }
+
+    throw new ResolutionError(result.error)
   }
   if (isString(value.$template)) {
     return resolveTemplateValue(value.$template, scope, path)

@@ -20,6 +20,8 @@ import {
   PubSub,
   createFlow,
   createWebSocket,
+  evaluateCondition,
+  evaluateExpression,
   catchError,
   EnqueueError,
   PoolError,
@@ -36,6 +38,52 @@ runner.registerCondition('hasQueue', ({ context }) => context.queue.length > 0)
 runner.loadConfig(config)
 const result = await runner.run('worker.tick', context, input)
 ```
+
+### Standalone evaluation
+
+`evaluateCondition(expression, scope, options?)` and `evaluateExpression(expression, scope, options?)` are synchronous helpers that work without creating or starting a flow or runner. Both accept JSON expression structures as `unknown` and use the same condition evaluator and value resolver as the runner.
+
+```ts
+const context = { visible: true, now: 1500, effectAt: 1000, attackDuration: 0.5 }
+const condition = evaluateCondition(
+  [
+    'and',
+    ['eq', '$context.visible', true],
+    [
+      'cooldownReady',
+      '$context.now',
+      '$context.effectAt',
+      { $expression: ['multiply', '$context.attackDuration', 1000] },
+    ],
+  ],
+  { context }
+)
+const duration = evaluateExpression(['multiply', '$context.attackDuration', 1000], { context })
+// condition: { ok: true, matched: true }
+// duration: { ok: true, value: 500 }
+```
+
+`EvaluationScope<TContext>` requires `context`; optional `input`, `data`, and `variables` default to empty objects. References, nested `$expression`, and `$template` use these explicitly supplied sources. Flow configuration and registered handlers are not read implicitly.
+
+`ConditionEvaluationOptions<TContext>` accepts `conditions` and `expressions`; `ExpressionEvaluationOptions` accepts `expressions`. Built-ins are available by default and cannot be replaced. Custom handlers use the existing `ConditionFn<TContext>` and `ExpressionOperator` contracts:
+
+The runner calls these same helpers. It passes its complete condition registry as a `Map` (reused without copying), expression handlers, and runtime. Standalone callers can keep supplying a custom condition record; the built-ins are added automatically. A supplied `Map` is the complete registry, including built-ins. Optional scope fields `runtime`, `strategy`, and `configPath` allow runtime reuse and diagnostic attribution; none is required for standalone evaluation.
+
+```ts
+const result = evaluateExpression(
+  ['double', '$input.amount'],
+  { context: {}, input: { amount: 3 } },
+  {
+    expressions: { double: ([value]) => Number(value) * 2 },
+  }
+)
+```
+
+The results are `ConditionOutcome` (`{ ok: true, matched: boolean, ensure?: true } | { ok: false, error: SlapError }`) and `ExpressionOutcome` (`{ ok: true, value: unknown } | { ok: false, error: SlapError }`). Invalid input, resolution failures, unknown operators, and thrown handler errors return `ok: false`; a non-matching condition returns `ok: true, matched: false`. Custom handler exception messages are not included in the error result.
+
+Pass an individual guard expression, such as `config.guards['cargo.hit']`; `['guard', name]` references are not expanded. Conditions retain `and`/`or` short-circuiting after validation. Boolean conditions and an absent (`undefined`) condition are supported; an absent condition matches. A root `ensure` mismatch returns `ensure: true` without executing a catch branch. `evaluateExpression` accepts the operator array directly, not a root `{ $expression: ... }` object.
+
+Built-in evaluation does not mutate supplied data. Custom conditions receive the original `context`, `input`, and `data` objects and a runtime with `get`, `data.get/set`, `variables.get`, `resolve`; their mutations to `data` remain visible to the caller.
 
 ## Core Types
 
@@ -283,8 +331,6 @@ type Runtime = {
   variables?: {
     get(path: string): unknown
   }
-  /** @deprecated Use runtime.data.get(path). */
-  getData(path: string): unknown
   /** @deprecated Use runtime.data.set(path, value). */
   setData(path: string, value: unknown): void
   resolve(value: unknown): unknown
@@ -301,7 +347,7 @@ type Runtime = {
 
 `runtime.get` and `runtime.set` read and write nested context values. `runtime.data.get` and `runtime.data.set` read and write temporary chain data.
 
-`runtime.getData` and `runtime.setData` are deprecated compatibility aliases and emit a console warning when called.
+`runtime.setData` is a deprecated compatibility alias and emits a console warning when called.
 
 `runtime.variables.get` reads immutable runtime variables. `runtime.resolve` resolves `$context.*`, `$data.*`, `$input.*`, and immutable `$variables.*` values. It also evaluates `$expression` and `$template` objects recursively, using the expression operators registered in runner options. In `$template`, `{{ path }}` reads runtime data for compatibility; `{{ data.path }}`, `{{ context.path }}`, and `{{ input.path }}` select their source explicitly.
 

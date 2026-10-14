@@ -5,7 +5,7 @@ import { slapError } from '~/helpers/errors/slapError'
 import { cloneData } from '~/helpers/trace/cloneData'
 import { createRuntime } from '~/helpers/runner/createRuntime'
 import { defaultMaxDepth, defaultMaxStepCount } from '~/helpers/runner/runnerDefaults'
-import { evaluateCondition } from '~/helpers/runner/evaluateCondition'
+import { evaluateCondition } from '~/evaluateCondition'
 import { executeSequence } from '~/helpers/runner/executeSequence'
 import { executeThen } from '~/helpers/runner/executeThen'
 import { failLimit } from '~/helpers/runner/failLimit'
@@ -135,11 +135,18 @@ export const executeStrategy = <TContext, TPatch>(
   const traceStep = state.stepCounter.current + 1
   const startedAt = Date.now()
 
-  const condition = evaluateCondition(strategy.when, environment.registry.conditions, {
-    ...state,
-    runtime,
-    strategy: id,
-  })
+  const condition = evaluateCondition(
+    strategy.when,
+    {
+      ...state,
+      runtime,
+      strategy: id,
+    },
+    {
+      conditions: environment.registry.conditions,
+      expressions: state.expressions,
+    }
+  )
   if (!condition.ok) {
     return handleFailure(
       withErrorStage(condition.error, {

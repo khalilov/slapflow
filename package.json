@@ -54,10 +54,10 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "npm run typecheck && vitest run",
+    "test": "npm run typecheck && npm run build && vitest run",
     "build": "tsup src/index.ts --format esm,cjs --dts --clean",
     "pack:check": "npm pack --dry-run",
-    "prepublishOnly": "npm test && npm run build",
+    "prepublishOnly": "npm test",
     "format": "prettier --write .",
     "check": "prettier --check ."
   },

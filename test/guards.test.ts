@@ -5,21 +5,6 @@ import { createFlow } from '~/createFlow'
 import { createPubSub } from '~/createPubSub'
 
 describe('guards', () => {
-  it('substitutes the guard expression into the strategy, not the reference', () => {
-    const runner = createRunner()
-    const config = {
-      guards: { 'colony-ready': ['truthy', '$data.colonyId'] as ['truthy', string] },
-      strategies: {
-        root: { fn: 'core.noop', when: ['guard', 'colony-ready'] as ['guard', string] },
-      },
-    }
-
-    const validation = runner.loadConfig(config)
-
-    assert.equal(validation.ok, true)
-    assert.deepEqual(validation.errors, [])
-  })
-
   it('reports a missing guard', () => {
     const runner = createRunner()
     const result = runner.validateConfig({
