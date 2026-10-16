@@ -88,8 +88,13 @@ Built-in evaluation does not mutate supplied data. Custom conditions receive the
 ## Core Types
 
 ```ts
+type TypeVariant = 'string' | 'number' | 'boolean' | 'undefined' | null
+type TypeDeclaration = TypeVariant | TypeVariant[]
+type TypeRules = Record<string, TypeDeclaration>
+
 type Config = {
   version?: 1
+  types?: TypeRules
   strategies: Record<string, Strategy>
   entrypoints?: Record<string, string>
   guards?: Record<string, ConditionExpression>
@@ -107,6 +112,26 @@ type Strategy = {
   terminal?: boolean
 }
 ```
+
+### Field types in conditions
+
+`types` declares allowed types by exact field name for `when` and named guards:
+
+```json
+{
+  "types": { "userId": ["string", null], "requestId": "string" },
+  "guards": {
+    "has-user": ["exists", "$input.payload.userId"],
+    "request-present": ["contains", "$input.payload", ["userId", "requestId"]]
+  }
+}
+```
+
+Only referenced fields of `context/input` are checked, at any depth, including objects inside arrays. `contains` checks only its listed own fields against their declared types, then applies `exists`. No whole-scope traversal or action/props/result validation occurs. Raw JavaScript reads inside custom handlers are not intercepted; condition `runtime.get/resolve` uses the same field checks.
+
+Allowed variants are `string`, `number`, `boolean`, `undefined`, and JSON `null`; a non-empty flat array denotes a union. Missing references resolve to `undefined`, which must be explicitly allowed. An absent own field in `contains` returns `false`. Nullable values still need `exists` to select a present value. `number` follows JavaScript `typeof`; finite-number and UUID checks remain separate. Only own rules are used; undeclared fields are unchanged.
+
+Malformed declarations produce `CONFIG_TYPES_INVALID`. A checked value of the wrong type produces `TYPE_MISMATCH`, using ordinary condition-error handling and existing `catch`. Short-circuited operands are not checked. Standalone evaluators accept these rules through optional `scope.types`; nested expressions and templates retain them. Rules are not passed to action value resolution or action runtime helpers.
 
 ## Error Reporting
 

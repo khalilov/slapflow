@@ -158,12 +158,18 @@ const config = {
 }
 ```
 
-## Проверка наличия нескольких полей
+## Типы полей и проверка наличия
 
-`contains` проверяет наличие сразу нескольких полей в `when` или именованном guard:
+Допустимые типы полей можно объявить один раз для `when` и именованных guards:
 
 ```json
 {
+  "types": {
+    "colonyId": "string",
+    "requestId": "string",
+    "instanceId": "string",
+    "targetInstanceId": "string"
+  },
   "guards": {
     "claim-request-valid": ["contains", "$input", ["colonyId", "requestId", "instanceId", "targetInstanceId"]]
   },
@@ -176,9 +182,11 @@ const config = {
 }
 ```
 
-`contains` проверяет все перечисленные собственные поля объекта: каждое должно иметь значение, отличное от `null` и `undefined`. `false`, `0` и пустая строка считаются существующими.
+`contains` проверяет все перечисленные собственные поля объекта: каждое должно соответствовать объявленному типу и иметь значение, отличное от `null` и `undefined`. `false`, `0` и пустая строка считаются существующими. Без `types` оператор проверяет только наличие значений.
 
-Для вложенного объекта достаточно изменить первый операнд: `["contains", "$input.payload", ["colonyId", "requestId"]]`. Подробнее — в [спецификации оператора](SPEC-RU.md#contains).
+Для вложенного объекта достаточно изменить первый операнд: `["contains", "$input.payload", ["colonyId", "requestId"]]`. Прямые ссылки вроде `$context.session.owner.userId` тоже проверяются по имени последнего поля, независимо от глубины.
+
+Типы проверяются только при чтении полей условием. Остальные поля, props и результаты действий не обходятся. Ошибка типа даёт `TYPE_MISMATCH`; непройденная проверка наличия даёт обычный `false`. Nullable-поле объявляется как `["string", null]`, допустимое отсутствие — с вариантом `"undefined"`. Подробнее — в [спецификации типов полей](SPEC-RU.md#типы-полей-в-условиях).
 
 ## Отдельное вычисление условий и выражений
 
@@ -190,6 +198,7 @@ import { evaluateCondition, evaluateExpression } from 'slapflow'
 const condition = evaluateCondition(['contains', '$input', ['colonyId', 'requestId']], {
   context: {},
   input: { colonyId: 'c-1', requestId: 'r-1' },
+  types: { colonyId: 'string', requestId: 'string' },
 })
 const duration = evaluateExpression(['multiply', '$input.seconds', 1000], { context: {}, input: { seconds: 2 } })
 ```
@@ -236,7 +245,7 @@ const flow = createFlow<Context, Patch, Events>(
 
 - Декларативные стратегии, условия, ветки обработки ошибок и точки входа.
 - Большой набор [встроенных условий](SPEC-RU.md#встроенные-условия) для сравнений, проверки типов, коллекций и составной логики.
-- `contains` для проверки наличия нескольких полей объекта.
+- Общие объявления типов для полей, используемых условиями, и `contains` для проверки наличия нескольких полей объекта.
 - Самостоятельное вычисление условий и выражений через `evaluateCondition` и `evaluateExpression`.
 - Типизированные PubSub-привязки и делегированные DOM-привязки.
 - Режимы `parallel`, `latest`, `queue` и `drop` с отдельными линиями для разных сущностей, а также keyed-пул `workers` с именованными пулами, backpressure и фан-аутом через `runtime.enqueue`.

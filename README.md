@@ -158,17 +158,18 @@ const config = {
 }
 ```
 
-Use `contains` to check several fields at once:
+Field types can be declared once for conditions:
 
 ```json
 {
+  "types": { "userId": ["string", null], "requestId": "string" },
   "guards": {
     "request-present": ["contains", "$input.payload", ["userId", "requestId"]]
   }
 }
 ```
 
-`contains` checks that every listed own field has a value other than `null` or `undefined`. `false`, `0`, and an empty string count as present. Use a nested first operand to check fields of a nested object.
+`when` and guards check only the fields they read. `contains` checks the listed own fields for declared types and non-nullish values. Other state, action props and action results are not traversed or validated. See [field types in conditions](SPEC.md#field-types-in-conditions).
 
 ## Fan out work through a keyed pool
 

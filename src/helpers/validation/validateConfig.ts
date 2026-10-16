@@ -4,6 +4,7 @@ import { detectNestedLoops } from '~/helpers/validation/detectNestedLoops'
 import { validateCondition } from '~/helpers/validation/validateCondition'
 import { validateNextList } from '~/helpers/validation/validateNextList'
 import { validateRefs } from '~/helpers/validation/validateRefs'
+import { validateTypes } from '~/helpers/validation/validateTypes'
 import { resolveGuards } from '~/helpers/validation/resolveGuards'
 import { validModes } from '~/helpers/validation/validationConstants'
 import { type RegistryReader } from '~/helpers/validation/registryReader'
@@ -39,6 +40,10 @@ export const validateConfig = (
         validateCondition(expression, name, `guards.${name}`, conditionsRegistry, errors, { allowEnsure: true })
       }
     }
+  }
+
+  if (config.types !== undefined) {
+    validateTypes(config.types, errors)
   }
 
   const guardResolution = resolveGuards(config)

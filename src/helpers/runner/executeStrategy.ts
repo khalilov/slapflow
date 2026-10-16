@@ -141,6 +141,7 @@ export const executeStrategy = <TContext, TPatch>(
       ...state,
       runtime,
       strategy: id,
+      types: config.types,
     },
     {
       conditions: environment.registry.conditions,

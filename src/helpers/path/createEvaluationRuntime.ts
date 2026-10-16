@@ -3,13 +3,23 @@ import { type Runtime } from '~/types'
 import { type ResolveScope } from '~/helpers/path/resolveScope'
 import { protectedPickOptions } from '~/helpers/path/protectedPickOptions'
 import { resolveValue } from '~/helpers/path/resolveValue'
+import { terminalFieldName } from '~/helpers/path/terminalFieldName'
+import { assertFieldType } from '~/helpers/type/assertFieldType'
 
 type EvaluationRuntimeScope<TContext> = ResolveScope<TContext> & { closed?: boolean }
 
 export const createEvaluationRuntime = <TContext>(
   scope: EvaluationRuntimeScope<TContext>
 ): Pick<Runtime, 'get' | 'data' | 'variables' | 'resolve'> => ({
-  get: (path) => pick(scope.context as Record<string, unknown>, path),
+  get: (path) =>
+    scope.types === undefined
+      ? pick(scope.context as Record<string, unknown>, path)
+      : assertFieldType(
+          pick(scope.context as Record<string, unknown>, path),
+          terminalFieldName(path),
+          `context.${path}`,
+          scope
+        ),
   data: {
     get: (path) => pick(scope.data, path),
     set: (path, value) => {

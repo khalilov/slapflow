@@ -11,10 +11,18 @@ import { resolveValue } from '~/helpers/path/resolveValue'
 
 export const evaluateExpression = <TContext>(
   expression: unknown,
-  { context, input = {}, data = {}, variables = {}, strategy, configPath }: EvaluationScope<TContext>,
+  { context, input = {}, data = {}, variables = {}, types, strategy, configPath }: EvaluationScope<TContext>,
   { expressions = {} }: ExpressionEvaluationOptions = {}
 ): ExpressionOutcome => {
-  const scope = { context, input, data, variables, expressions, ...(strategy === undefined ? {} : { strategy }) }
+  const scope = {
+    context,
+    input,
+    data,
+    variables,
+    expressions,
+    ...(types === undefined ? {} : { types }),
+    ...(strategy === undefined ? {} : { strategy }),
+  }
   const path = configPath ?? ''
   const details = { ...(strategy === undefined ? {} : { strategy }), path }
 

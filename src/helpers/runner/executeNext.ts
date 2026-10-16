@@ -16,7 +16,7 @@ export const executeNext = <TContext, TPatch>(
     const runtime = createRuntime(state)
     const condition = evaluateCondition(
       item.when,
-      { ...state, runtime, strategy: id },
+      { ...state, runtime, strategy: id, types: environment.configRef.current?.types },
       {
         conditions: environment.registry.conditions,
         expressions: state.expressions,

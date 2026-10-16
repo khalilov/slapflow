@@ -1,5 +1,7 @@
 import { pick } from 'objwalk'
 import { type ResolveScope } from '~/helpers/path/resolveScope'
+import { terminalFieldName } from '~/helpers/path/terminalFieldName'
+import { assertFieldType } from '~/helpers/type/assertFieldType'
 import { createResolutionError } from '~/helpers/path/createResolutionError'
 import { pathReferenceRegex } from '~/helpers/path/pathReferenceRegex'
 import { protectedPickOptions } from '~/helpers/path/protectedPickOptions'
@@ -30,11 +32,12 @@ export const resolvePathReference = <TContext>(value: string, scope: ResolveScop
     const source = scope[root]
 
     if (nestedPath) {
-      if (source && typeof source === 'object') {
-        return pick(source as Record<string, unknown>, nestedPath)
-      }
+      const resolved =
+        source && typeof source === 'object' ? pick(source as Record<string, unknown>, nestedPath) : undefined
 
-      return undefined
+      return scope.types !== undefined && (root === 'context' || root === 'input')
+        ? assertFieldType(resolved, terminalFieldName(nestedPath), `${root}.${nestedPath}`, scope)
+        : resolved
     }
 
     return source

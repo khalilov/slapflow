@@ -15,10 +15,18 @@ import { validateCondition } from '~/helpers/validation/validateCondition'
 
 export const evaluateCondition = <TContext>(
   expression: unknown,
-  { context, input = {}, data = {}, variables = {}, runtime, strategy, configPath }: EvaluationScope<TContext>,
+  { context, input = {}, data = {}, variables = {}, types, runtime, strategy, configPath }: EvaluationScope<TContext>,
   { conditions = {}, expressions = {} }: ConditionEvaluationOptions<TContext> = {}
 ): ConditionOutcome => {
-  const scope = { context, input, data, variables, expressions, ...(strategy === undefined ? {} : { strategy }) }
+  const scope = {
+    context,
+    input,
+    data,
+    variables,
+    expressions,
+    ...(types === undefined ? {} : { types }),
+    ...(strategy === undefined ? {} : { strategy }),
+  }
   const path = configPath ?? (strategy ? `strategies.${strategy}.when` : 'when')
   const errors: ValidationIssue[] = []
   const { registry, register } =
@@ -26,6 +34,12 @@ export const evaluateCondition = <TContext>(
       ? { registry: conditions, register: undefined }
       : createReservedRegistry(BUILTIN_CONDITIONS as readonly [string, ConditionFn<TContext>][], 'condition')
   const evaluationScope = { ...scope, runtime: runtime ?? createEvaluationRuntime(scope), configPath: path }
+
+  if (types !== undefined && runtime !== undefined && Array.isArray(expression)) {
+    const typedRuntime = createEvaluationRuntime(scope)
+
+    evaluationScope.runtime = { ...evaluationScope.runtime, get: typedRuntime.get, resolve: typedRuntime.resolve }
+  }
 
   try {
     if (register !== undefined) {

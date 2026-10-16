@@ -53,6 +53,7 @@ const config: Config = {
 
 - `entrypoints`: map entrypoint name → starting strategy.
 - `guards`: reusable `when` expressions, referenced by `['guard', name]`.
+- `types`: optional allowed types by field name, applied only to fields read by conditions.
 - `strategies`: each has `fn` (action name), optional `when`, `then`, `catch`, `mode`, `terminal`, `props`.
 
 ## Execution modes
@@ -119,13 +120,18 @@ const cooldown: ConditionExpression = ['cooldownReady', '$context.now', '$contex
 
 Paths: `$context.path`, `$data.path`, `$input.path`, `$variables.path`.
 
-`contains` takes an object and a string array of literal own field names. `false`, `0`, and `''` count as present; `null` and `undefined` do not. Missing own fields return `false`; malformed operands, including sparse name arrays, return `false`. An empty name list matches a valid object. Use a nested first operand for nested objects; there is no `$props` reference root.
+Optional `config.types` declares allowed variants by field name for `when`/guards, e.g. `{ userId: ['string', null], requestId: 'string' }`. Supported variants: `string`, `number`, `boolean`, `undefined`, JSON `null`; non-empty flat arrays form unions. Only referenced `context/input` fields are checked, at any depth. `contains` checks its listed own fields against these rules and `exists`; unlisted fields are not traversed. Wrong types produce `TYPE_MISMATCH` through ordinary condition error handling. No full-state, action props or action-result validation. Standalone evaluators use optional `scope.types`.
+
+`contains` takes an object and a string array of literal own field names. `false`, `0`, and `''` count as present; `null` and `undefined` do not. Missing own fields return `false`; malformed operands, including sparse name arrays, return `false`. An empty name list matches a valid object. With `types`, a found field of the wrong type raises `TYPE_MISMATCH`; this is separate from an ordinary presence mismatch. Use a nested first operand for nested objects; there is no `$props` reference root.
 
 ```json
 {
+  "types": { "colonyId": "string", "requestId": "string" },
   "guards": { "request-present": ["contains", "$input.payload", ["colonyId", "requestId"]] }
 }
 ```
+
+Add `"undefined"` explicitly if a typed field reference may be absent. Referenced fields in short-circuited operands are not checked. `$data/$variables` are not traversed; their objects can still be passed to `contains`, which checks only the listed fields.
 
 ### `ensure` — declarative input invariant
 

@@ -1,8 +1,13 @@
 export type Input = Record<string, unknown>
 export type Props = Record<string, unknown>
 
+export type TypeVariant = 'string' | 'number' | 'boolean' | 'undefined' | null
+export type TypeDeclaration = TypeVariant | TypeVariant[]
+export type TypeRules = Record<string, TypeDeclaration>
+
 export type Config = {
   version?: 1
+  types?: TypeRules
   strategies: Record<string, Strategy>
   entrypoints?: Record<string, string>
   guards?: Record<string, ConditionExpression>
@@ -38,6 +43,7 @@ export type EvaluationScope<TContext> = {
   input?: Input
   data?: Record<string, unknown>
   variables?: Variables
+  types?: TypeRules | undefined
   runtime?: Pick<Runtime, 'resolve' | 'get' | 'data' | 'variables'>
   strategy?: string
   configPath?: string
@@ -541,6 +547,7 @@ export type ConditionFn<TContext> = (
     input: Input
     data: Record<string, unknown>
     runtime: Pick<Runtime, 'resolve' | 'get' | 'data' | 'variables'>
+    types?: TypeRules | undefined
   },
   ...conditionArgs: unknown[]
 ) => boolean
