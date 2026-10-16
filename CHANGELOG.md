@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0]
+
+### Added
+
+- `contains` built-in condition: `['contains', '$input', ['colonyId', 'requestId']]` checks that every listed own field has a value other than `null` or `undefined`. `false`, `0`, and empty strings count as present. Nested objects can be passed as the first operand.
+- Optional `Config.types` rules keyed by exact field name for `when` and named guards. Referenced `context/input` fields are checked at any nesting depth; `contains` checks its listed fields against the same rules. Supported variants are `string`, `number`, `boolean`, `undefined`, and JSON `null`, with non-empty flat arrays for unions. Exported `TypeVariant`, `TypeDeclaration`, and `TypeRules` types.
+- Optional `EvaluationScope.types` for standalone evaluators, including nested expressions, templates, and condition runtime reads. Checks apply only to fields read by conditions; short-circuited operands and unrelated state are not checked. Invalid declarations produce `CONFIG_TYPES_INVALID`; type mismatches use existing condition error handling with `TYPE_MISMATCH`.
+
+### Documented
+
+- `contains` and field type rules in English and Russian documentation and the agent skill. Corrected skill examples and clarified `terminal`/`continue` behavior in the skill and Russian specification.
+- Flow screenshot in both READMEs; the package now includes `README-RU.md` and `flow.png`.
+
 ## [2.0.0]
 
 ### Added
