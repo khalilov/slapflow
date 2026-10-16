@@ -167,14 +167,14 @@ type ErrorStage = {
 
 Возвращаемое значение действия нормализуется в один итог. Соответствие:
 
-| Возврат                                           | Итог                                                          |
-| ------------------------------------------------- | ------------------------------------------------------------- |
-| `undefined` / `null`                              | `success`                                                     |
-| `false`                                           | `skipped`                                                     |
-| `{ type: 'skip', reason?, data? }`                | `skipped` (селектор пробует следующую ветку)                  |
-| `{ type: 'stop', reason?, patch?, events? }`      | `stopped` (цепочка останавливается без ошибки)                |
-| `{ type: 'fail', reason?, data?, error? }`        | `failed` (запускается `catch`, затем `onError`)               |
-| `{ context?, data?, patch?, events?, continue? }` | `success`; `continue: false` прерывает оставшиеся `then`-цели |
+| Возврат                                           | Итог                                                               |
+| ------------------------------------------------- | ------------------------------------------------------------------ |
+| `undefined` / `null`                              | `success`                                                          |
+| `false`                                           | `skipped`                                                          |
+| `{ type: 'skip', reason?, data? }`                | `skipped` (селектор пробует следующую ветку)                       |
+| `{ type: 'stop', reason?, patch?, events? }`      | `stopped` (цепочка останавливается без ошибки)                     |
+| `{ type: 'fail', reason?, data?, error? }`        | `failed` (запускается `catch`, затем `onError`)                    |
+| `{ context?, data?, patch?, events?, continue? }` | `success`; `continue: false` не запускает `then` текущей стратегии |
 
 Брошенное исключение трактуется как `fail`. Возврат `false` и `{ type: 'skip' }` эквивалентны.
 
@@ -231,28 +231,39 @@ runner.registerCondition('hasQueue', hasItems)
 
 ## Встроенные условия
 
-| Условие         | Описание                                                                                                     | Пример                                                                          |
-| --------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| `and`           | Совпадает, когда совпали все вложенные условия.                                                              | `['and', ['typeIs', '$input.id', 'string'], ['notEmpty', '$input.id']]`         |
-| `or`            | Совпадает, когда совпало хотя бы одно вложенное условие.                                                     | `['or', ['eq', '$context.status', 'ready'], ['eq', '$context.status', 'idle']]` |
-| `not`           | Инвертирует вложенное условие.                                                                               | `['not', ['truthy', '$context.disabled']]`                                      |
-| `ensure`        | Направляет несовпавшее условие в `catch` без вызова `onError`. Только корень стратегийного `when` или guard. | `['ensure', ['exists', '$input.sessionId']]`                                    |
-| `eq`            | Сравнивает два значения через `Object.is`.                                                                   | `['eq', '$context.status', 'ready']`                                            |
-| `neq`           | Совпадает, когда `Object.is` не считает значения равными.                                                    | `['neq', '$context.status', 'failed']`                                          |
-| `gt`            | Численно сравнивает значения через `>`.                                                                      | `['gt', '$context.count', 0]`                                                   |
-| `gte`           | Численно сравнивает значения через `>=`.                                                                     | `['gte', '$context.count', 1]`                                                  |
-| `lt`            | Численно сравнивает значения через `<`.                                                                      | `['lt', '$context.count', 100]`                                                 |
-| `lte`           | Численно сравнивает значения через `<=`.                                                                     | `['lte', '$context.count', 99]`                                                 |
-| `truthy`        | Применяет JavaScript truthiness.                                                                             | `['truthy', '$context.enabled']`                                                |
-| `falsy`         | Применяет JavaScript falsiness.                                                                              | `['falsy', '$context.disabled']`                                                |
-| `exists`        | Совпадает для значений, отличных от `null` и `undefined`.                                                    | `['exists', '$data.response']`                                                  |
-| `missing`       | Совпадает для `null` или `undefined`.                                                                        | `['missing', '$data.error']`                                                    |
-| `empty`         | Совпадает для пустых строк, массивов, map, set, объектов и nullish-значений.                                 | `['empty', '$context.items']`                                                   |
-| `notEmpty`      | Совпадает для поддерживаемых значений с размером больше нуля.                                                | `['notEmpty', '$context.items']`                                                |
-| `includes`      | Проверяет вхождение в строки, массивы и set.                                                                 | `['includes', ['parts', 'food'], '$input.resource']`                            |
-| `typeIs`        | Совпадает с `string`, `number`, `finite-number`, `boolean`, `array` или `record`.                            | `['typeIs', '$input.amount', 'finite-number']`                                  |
-| `changed`       | Совпадает, когда текущее и предыдущее значения различаются по `Object.is`.                                   | `['changed', '$context.current', '$context.previous']`                          |
-| `cooldownReady` | Совпадает, когда предыдущей метки времени нет или задержка истекла.                                          | `['cooldownReady', '$context.now', '$context.lastAt', 1000]`                    |
+| Условие         | Описание                                                                                                                                                                                                                                                  | Пример                                                                          |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `and`           | Совпадает, когда совпали все вложенные условия.                                                                                                                                                                                                           | `['and', ['typeIs', '$input.id', 'string'], ['notEmpty', '$input.id']]`         |
+| `or`            | Совпадает, когда совпало хотя бы одно вложенное условие.                                                                                                                                                                                                  | `['or', ['eq', '$context.status', 'ready'], ['eq', '$context.status', 'idle']]` |
+| `not`           | Инвертирует вложенное условие.                                                                                                                                                                                                                            | `['not', ['truthy', '$context.disabled']]`                                      |
+| `ensure`        | Направляет несовпавшее условие в `catch` без вызова `onError`. Только корень стратегийного `when` или guard.                                                                                                                                              | `['ensure', ['exists', '$input.sessionId']]`                                    |
+| `eq`            | Сравнивает два значения через `Object.is`.                                                                                                                                                                                                                | `['eq', '$context.status', 'ready']`                                            |
+| `neq`           | Совпадает, когда `Object.is` не считает значения равными.                                                                                                                                                                                                 | `['neq', '$context.status', 'failed']`                                          |
+| `gt`            | Численно сравнивает значения через `>`.                                                                                                                                                                                                                   | `['gt', '$context.count', 0]`                                                   |
+| `gte`           | Численно сравнивает значения через `>=`.                                                                                                                                                                                                                  | `['gte', '$context.count', 1]`                                                  |
+| `lt`            | Численно сравнивает значения через `<`.                                                                                                                                                                                                                   | `['lt', '$context.count', 100]`                                                 |
+| `lte`           | Численно сравнивает значения через `<=`.                                                                                                                                                                                                                  | `['lte', '$context.count', 99]`                                                 |
+| `truthy`        | Применяет JavaScript truthiness.                                                                                                                                                                                                                          | `['truthy', '$context.enabled']`                                                |
+| `falsy`         | Применяет JavaScript falsiness.                                                                                                                                                                                                                           | `['falsy', '$context.disabled']`                                                |
+| `exists`        | Совпадает для значений, отличных от `null` и `undefined`.                                                                                                                                                                                                 | `['exists', '$data.response']`                                                  |
+| `missing`       | Совпадает для `null` или `undefined`.                                                                                                                                                                                                                     | `['missing', '$data.error']`                                                    |
+| `empty`         | Совпадает для пустых строк, массивов, map, set, объектов и nullish-значений.                                                                                                                                                                              | `['empty', '$context.items']`                                                   |
+| `notEmpty`      | Совпадает для поддерживаемых значений с размером больше нуля.                                                                                                                                                                                             | `['notEmpty', '$context.items']`                                                |
+| `includes`      | Проверяет вхождение в строки, массивы и set.                                                                                                                                                                                                              | `['includes', ['parts', 'food'], '$input.resource']`                            |
+| `contains`      | Совпадает, когда каждое перечисленное имя — собственное поле первого операнда со значением, отличным от `null` и `undefined`. В отличие от `includes`, проверяющего вхождение значения в коллекцию, `contains` проверяет наличие названных полей объекта. | `['contains', '$input', ['colonyId', 'requestId']]`                             |
+| `typeIs`        | Совпадает с `string`, `number`, `finite-number`, `boolean`, `array` или `record`.                                                                                                                                                                         | `['typeIs', '$input.amount', 'finite-number']`                                  |
+| `changed`       | Совпадает, когда текущее и предыдущее значения различаются по `Object.is`.                                                                                                                                                                                | `['changed', '$context.current', '$context.previous']`                          |
+| `cooldownReady` | Совпадает, когда предыдущей метки времени нет или задержка истекла.                                                                                                                                                                                       | `['cooldownReady', '$context.now', '$context.lastAt', 1000]`                    |
+
+### `contains`
+
+```json
+["contains", "$input.payload", ["colonyId", "requestId"]]
+```
+
+Первый операнд — объект, второй — массив строк с непосредственными именами полей. Все поля должны быть собственными и иметь значения, отличные от `null` и `undefined`. `false`, `0` и `""` проходят проверку. Для корректного объекта пустой список даёт `true`; некорректный объект или список имён, включая разреженный массив, дают `false`.
+
+Имена трактуются буквально: `"owner.userId"` — одно имя поля. Для вложенного объекта передайте `$input.payload.owner` первым операндом и `"userId"` в списке. `includes` проверяет вхождение значения в коллекцию, а `contains` — наличие всех названных полей объекта.
 
 ### `ensure`
 
@@ -316,7 +327,7 @@ export const config = {
 
 `sequence` — режим по умолчанию, и он прерывает оставшиеся `then`-цели на _любом_ не-`success` (`skipped`, `stopped`, `failed`) — не только на сбое. Условный шаг внутри последовательности — это, таким образом, скрытый ранний выход для всего остатка. Если пропуск шага не должен рвать цепочку, заверните его в селектор с запасным `core.noop`.
 
-`terminal: true` останавливает `then`-цепочку после этой стратегии даже при `success`; `continue: false` в `ActionSuccess` даёт тот же эффект.
+`terminal: true` не запускает `then` текущей стратегии после успешного действия; `continue: false` в `ActionSuccess` даёт тот же эффект. Родительская `sequence` при этом может продолжить выполнение следующих целей. Для остановки всего запуска используйте `core.stop`.
 
 ## Вспомогательные средства среды выполнения
 

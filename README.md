@@ -3,9 +3,11 @@
 When the same business flow can start from a form, an API route, a job, or a WebSocket message, its control flow tends to spread across the application. Slapflow gives that flow one explicit home: a chain of ordinary TypeScript functions.
 
 [![bundle size](https://img.shields.io/bundlephobia/minzip/slapflow?label=bundle%20size)](https://bundlephobia.com/package/slapflow)
-[![Socket security](https://socket.dev/api/badge/npm/package/slapflow/1.0.2)](https://socket.dev/npm/package/slapflow/overview/1.0.2)
+[![Socket security](https://socket.dev/api/badge/npm/package/slapflow/2.1.0)](https://socket.dev/npm/package/slapflow/overview/2.1.0)
 
 Slapflow takes care of orchestration, concurrency, cancellation, and diagnostics. Your application keeps ownership of its domain state and side effects.
+
+![Flow](flow.png)
 
 ## Why use it?
 
@@ -156,6 +158,18 @@ const config = {
 }
 ```
 
+Use `contains` to check several fields at once:
+
+```json
+{
+  "guards": {
+    "request-present": ["contains", "$input.payload", ["userId", "requestId"]]
+  }
+}
+```
+
+`contains` checks that every listed own field has a value other than `null` or `undefined`. `false`, `0`, and an empty string count as present. Use a nested first operand to check fields of a nested object.
+
 ## Fan out work through a keyed pool
 
 A `workers` binding runs tasks through a shared pool: at most `workers` runs at once, tasks with the same line key run in FIFO order and never in parallel, and different keys run concurrently. An action fans work into a named pool with `runtime.enqueue`:
@@ -223,11 +237,11 @@ npm run pack:check
 The package ships a `SKILL.md` skill in `skills/slapflow/`. Point your agent at it —
 symlink the **folder**, not the `SKILL.md` file.
 
-| Tool | Location | Install |
-| --- | --- | --- |
-| opencode | `opencode.json` → `skills.paths` | config |
+| Tool        | Location                                                      | Install |
+| ----------- | ------------------------------------------------------------- | ------- |
+| opencode    | `opencode.json` → `skills.paths`                              | config  |
 | Claude Code | `~/.claude/skills/` (personal) or `.claude/skills/` (project) | symlink |
-| Codex | `~/.agents/skills/` (user) or `.agents/skills/` (repo) | symlink |
+| Codex       | `~/.agents/skills/` (user) or `.agents/skills/` (repo)        | symlink |
 
 opencode — add the packaged path to `opencode.json`:
 

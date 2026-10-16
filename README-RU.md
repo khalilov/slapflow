@@ -7,6 +7,8 @@
 
 Slapflow берёт на себя порядок выполнения, конкурентность, отмену и диагностику. Состояние предметной области и побочные эффекты по-прежнему остаются в вашем приложении.
 
+![Граф обработки команд в slapflow-studio](flow.png)
+
 ## Когда он пригодится
 
 - **Когда важен сам сценарий, а не инфраструктура вокруг него.** Цепочка показывает бизнес-поток целиком, вместо того чтобы прятать его среди UI-обработчиков и транспортного кода.
@@ -156,6 +158,44 @@ const config = {
 }
 ```
 
+## Проверка наличия нескольких полей
+
+`contains` проверяет наличие сразу нескольких полей в `when` или именованном guard:
+
+```json
+{
+  "guards": {
+    "claim-request-valid": ["contains", "$input", ["colonyId", "requestId", "instanceId", "targetInstanceId"]]
+  },
+  "strategies": {
+    "claim.process": {
+      "fn": "claim.process",
+      "when": ["guard", "claim-request-valid"]
+    }
+  }
+}
+```
+
+`contains` проверяет все перечисленные собственные поля объекта: каждое должно иметь значение, отличное от `null` и `undefined`. `false`, `0` и пустая строка считаются существующими.
+
+Для вложенного объекта достаточно изменить первый операнд: `["contains", "$input.payload", ["colonyId", "requestId"]]`. Подробнее — в [спецификации оператора](SPEC-RU.md#contains).
+
+## Отдельное вычисление условий и выражений
+
+`evaluateCondition` и `evaluateExpression` работают без создания flow или runner и используют тот же вычислитель:
+
+```ts
+import { evaluateCondition, evaluateExpression } from 'slapflow'
+
+const condition = evaluateCondition(['contains', '$input', ['colonyId', 'requestId']], {
+  context: {},
+  input: { colonyId: 'c-1', requestId: 'r-1' },
+})
+const duration = evaluateExpression(['multiply', '$input.seconds', 1000], { context: {}, input: { seconds: 2 } })
+```
+
+Хелперы синхронные. `evaluateCondition` возвращает `{ ok: true, matched }` или `{ ok: false, error }`, а `evaluateExpression` — `{ ok: true, value }` или `{ ok: false, error }`. Ошибка отличается от обычного несовпадения условия. Ссылку `['guard', name]` для отдельного вычисления нужно заранее заменить самим выражением из `config.guards`.
+
 ## Фан-аут через keyed-пул
 
 Привязка `workers` прогоняет задачи через общий пул: одновременно не более `workers` запусков, задачи с одним ключом линии идут строго по FIFO и никогда параллельно, разные ключи — параллельно. Действие раскладывает работу по именованному пулу через `runtime.enqueue`:
@@ -196,6 +236,8 @@ const flow = createFlow<Context, Patch, Events>(
 
 - Декларативные стратегии, условия, ветки обработки ошибок и точки входа.
 - Большой набор [встроенных условий](SPEC-RU.md#встроенные-условия) для сравнений, проверки типов, коллекций и составной логики.
+- `contains` для проверки наличия нескольких полей объекта.
+- Самостоятельное вычисление условий и выражений через `evaluateCondition` и `evaluateExpression`.
 - Типизированные PubSub-привязки и делегированные DOM-привязки.
 - Режимы `parallel`, `latest`, `queue` и `drop` с отдельными линиями для разных сущностей, а также keyed-пул `workers` с именованными пулами, backpressure и фан-аутом через `runtime.enqueue`.
 - Нативный WebSocket-клиент, проксирующий события сокета в шину.
@@ -222,11 +264,11 @@ npm run pack:check
 
 Пакет содержит `SKILL.md` в `skills/slapflow/`. Укажите агенту на **папку**, а не на файл `SKILL.md`.
 
-| Инструмент | Расположение | Установка |
-| --- | --- | --- |
-| opencode | `opencode.json` → `skills.paths` | конфиг |
-| Claude Code | `~/.claude/skills/` (личный) или `.claude/skills/` (проект) | symlink |
-| Codex | `~/.agents/skills/` (пользователь) или `.agents/skills/` (репо) | symlink |
+| Инструмент  | Расположение                                                    | Установка |
+| ----------- | --------------------------------------------------------------- | --------- |
+| opencode    | `opencode.json` → `skills.paths`                                | конфиг    |
+| Claude Code | `~/.claude/skills/` (личный) или `.claude/skills/` (проект)     | symlink   |
+| Codex       | `~/.agents/skills/` (пользователь) или `.agents/skills/` (репо) | symlink   |
 
 opencode — добавьте путь к пакету в `opencode.json`:
 

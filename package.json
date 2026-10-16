@@ -42,6 +42,8 @@
   "module": "./dist/index.js",
   "files": [
     "dist",
+    "README-RU.md",
+    "flow.png",
     "SPEC.md",
     "SPEC-RU.md",
     "RUNTIME-FLOW.mmd",

@@ -1,5 +1,6 @@
 import { type ConditionFn } from '~/types'
 import { changedCondition } from '~/helpers/conditions/changedCondition'
+import { containsCondition } from '~/helpers/conditions/containsCondition'
 import { cooldownReadyCondition } from '~/helpers/conditions/cooldownReadyCondition'
 import { emptyCondition } from '~/helpers/conditions/emptyCondition'
 import { eqCondition } from '~/helpers/conditions/eqCondition'
@@ -32,6 +33,7 @@ export const BUILTIN_CONDITIONS: readonly [name: string, condition: ConditionFn<
   ['empty', emptyCondition],
   ['notEmpty', notEmptyCondition],
   ['includes', includesCondition],
+  ['contains', containsCondition],
   ['typeIs', typeIsCondition],
   ['changed', changedCondition],
   ['cooldownReady', cooldownReadyCondition],

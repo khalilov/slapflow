@@ -94,6 +94,30 @@ describe('ensure condition', () => {
     assert.equal(reports.length, 0)
   })
 
+  it('routes a failed contains ensure into catch', async () => {
+    const reports: SlapErrorEvent<Ctx>[] = []
+    const runner = createRunner<Ctx>({ onError: defineErrorReporter((event) => reports.push(event)) })
+
+    runner.loadConfig({
+      strategies: {
+        root: {
+          fn: 'core.noop',
+          when: ['ensure', ['contains', '$input', ['colonyId', 'requestId']]],
+          then: ['load'],
+          catch: ['require'],
+        },
+        load: { fn: 'core.patch', props: { patch: 'loaded' } },
+        require: { fn: 'core.patch', props: { patch: 'required' } },
+      },
+    })
+
+    const result = await runner.run('root', {}, { colonyId: 'c-1' })
+
+    assert.equal(result.status, 'success')
+    assert.deepEqual(result.patches, ['required'])
+    assert.equal(reports.length, 0)
+  })
+
   it('proceeds normally when the ensure condition matches', async () => {
     const runner = createRunner<Ctx>()
 

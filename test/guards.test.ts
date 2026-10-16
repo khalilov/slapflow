@@ -86,4 +86,23 @@ describe('guards', () => {
 
     assert.deepEqual(matched, ['colony-1'])
   })
+
+  it('evaluates a contains guard through the runner', async () => {
+    const runner = createRunner()
+
+    runner.loadConfig({
+      guards: { 'claim-request-valid': ['contains', '$input', ['colonyId', 'requestId']] },
+      strategies: {
+        root: { fn: 'core.patch', props: { patch: 'claimed' }, when: ['guard', 'claim-request-valid'] },
+      },
+    })
+
+    const claimed = await runner.run('root', {}, { colonyId: 'c-1', requestId: 'r-1' })
+    const skipped = await runner.run('root', {}, { colonyId: 'c-1' })
+
+    assert.equal(claimed.status, 'success')
+    assert.deepEqual(claimed.patches, ['claimed'])
+    assert.equal(skipped.status, 'skipped')
+    assert.deepEqual(skipped.patches, [])
+  })
 })

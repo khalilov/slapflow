@@ -1,6 +1,6 @@
 ---
 name: slapflow
-description: Use when writing or editing TypeScript that imports `slapflow`, calls `createFlow`, registers actions/conditions, builds declarative strategy graphs, or works with the PubSub bus and WebSocket client.
+description: Use when creating or changing Slapflow runtime.json graphs, TypeScript actions or conditions, flow/runner configuration, PubSub bindings, or the Slapflow WebSocket client.
 ---
 
 # slapflow
@@ -27,6 +27,8 @@ import {
   type Strategy,
   type Runtime,
   type ActionArgs,
+  type Action,
+  type ConditionFn,
   type ConditionExpression,
   type SlapError,
 } from 'slapflow'
@@ -43,6 +45,8 @@ const config: Config = {
     'worker.tick': { fn: 'core.selector', mode: 'selector', then: ['worker.pick', 'worker.idle'] },
     'worker.pick': { fn: 'jobs.findNext', when: ['guard', 'has-colony'], then: ['jobs.reserve', 'jobs.execute'] },
     'worker.idle': { fn: 'core.noop' },
+    'jobs.reserve': { fn: 'jobs.reserve' },
+    'jobs.execute': { fn: 'jobs.execute' },
   },
 }
 ```
@@ -54,7 +58,7 @@ const config: Config = {
 ## Execution modes
 
 | Mode       | Behaviour on non-`success`                    |
-|------------|-----------------------------------------------|
+| ---------- | --------------------------------------------- |
 | `sequence` | **interrupts the rest** of `then` (default)   |
 | `selector` | tries next branch (`skipped` = try next)      |
 | `parallel` | runs all branches concurrently, isolated data |
@@ -63,32 +67,20 @@ A conditional step in a `sequence` is a **hidden early exit** for the whole rema
 chain, wrap it in a selector with `core.noop` fallback.
 
 ```ts
-// ❌ breaks the chain when condition fails
-{
-  fn: 'jobs.check', when
-:
-  ['eq', '$context.ready', true], then
-:
-  ['jobs.run']
-}
-
-// ✅ selector with noop fallback — skipping is a normal outcome
-{
-  fn: 'core.selector', mode
-:
-  'selector', then
-:
-  [
-    { fn: 'jobs.check', when: ['eq', '$context.ready', true], then: ['jobs.run'] },
-    { fn: 'core.noop' }
-  ]
+const config: Config = {
+  strategies: {
+    'jobs.optional': { fn: 'core.selector', mode: 'selector', then: ['jobs.check', 'jobs.noop'] },
+    'jobs.check': { fn: 'jobs.check', when: ['eq', '$context.ready', true], then: ['jobs.run'] },
+    'jobs.run': { fn: 'jobs.run' },
+    'jobs.noop': { fn: 'core.noop' },
+  },
 }
 ```
 
 ## Built-in actions
 
 | Action          | Required props                    | Purpose                                |
-|-----------------|-----------------------------------|----------------------------------------|
+| --------------- | --------------------------------- | -------------------------------------- |
 | `core.noop`     | —                                 | succeeds, does nothing                 |
 | `core.stop`     | `reason?`                         | stops the run cleanly                  |
 | `core.fail`     | `reason?`, `data?`                | fails strategy, triggers `catch`       |
@@ -107,8 +99,7 @@ chain, wrap it in a selector with `core.noop` fallback.
 via `then`/`catch`) is invalid. Default max is `999`. `immediate: true` runs first iteration without delay. Overlapping
 iterations are skipped; a failed iteration executes `catch`.
 
-`core.fetch` props: **`url`
-**, `method?`, `headers?`, `body?`, `credentials?` (`include`|`same-origin`|`omit`), `response?` (`json`|`text`|`blob`|`arrayBuffer`|`none`), `dataPath?`, `contextPath?`, `acceptStatuses?`, `retryStatuses?`, `retry?`.
+`core.fetch` props: **`url`**, `method?`, `headers?`, `body?`, `credentials?` (`include`|`same-origin`|`omit`), `response?` (`json`|`text`|`blob`|`arrayBuffer`|`none`), `dataPath?`, `contextPath?`, `acceptStatuses?`, `retryStatuses?`, `retry?`.
 Successful response is normalized as `{ status, ok, headers, body }`. Default retry: 2 attempts for network failures
 and `408`, `425`, `429`, `5xx`. Retry options: `initialDelay`, `maxDelay`, `multiplier`, `jitter`, `maxAttempts`.
 
@@ -119,15 +110,22 @@ handle per-item failures with a `catch` on the leaf strategy.
 
 ## Built-in conditions
 
-`and`, `or`, `not`, `ensure`, `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `truthy`, `falsy`, `exists`, `missing`, `empty`, `notEmpty`, `includes`, `typeIs`, `changed`, `cooldownReady`.
+`and`, `or`, `not`, `ensure`, `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `truthy`, `falsy`, `exists`, `missing`, `empty`, `notEmpty`, `includes`, `contains`, `typeIs`, `changed`, `cooldownReady`.
 
 ```ts
-;['and', ['eq', '$context.status', 'ready'], ['gt', '$context.count', 0]][
-  ('cooldownReady', '$context.now', '$context.lastAt', 1000)
-  ]
+const ready: ConditionExpression = ['and', ['eq', '$context.status', 'ready'], ['gt', '$context.count', 0]]
+const cooldown: ConditionExpression = ['cooldownReady', '$context.now', '$context.lastAt', 1000]
 ```
 
 Paths: `$context.path`, `$data.path`, `$input.path`, `$variables.path`.
+
+`contains` takes an object and a string array of literal own field names. `false`, `0`, and `''` count as present; `null` and `undefined` do not. Missing own fields return `false`; malformed operands, including sparse name arrays, return `false`. An empty name list matches a valid object. Use a nested first operand for nested objects; there is no `$props` reference root.
+
+```json
+{
+  "guards": { "request-present": ["contains", "$input.payload", ["colonyId", "requestId"]] }
+}
+```
 
 ### `ensure` — declarative input invariant
 
@@ -137,22 +135,18 @@ It is valid only as the **root** operator of a strategy `when` (or of a guard re
 must define `catch`.
 
 ```ts
-'check-session'
-:
-{
-  fn: 'check-session',
-    when
-:
-  ['ensure', ['and', ['exists', '$input.sessionId'], ['typeIs', '$input.sessionId', 'string']]],
-    props
-:
-  {
-    sessionId: '$input.sessionId'
-  }
-,
-  then: ['load-user-data'],
-catch:
-  ['require-auth'],
+const config: Config = {
+  strategies: {
+    'check-session': {
+      fn: 'check-session',
+      when: ['ensure', ['and', ['exists', '$input.sessionId'], ['typeIs', '$input.sessionId', 'string']]],
+      props: { sessionId: '$input.sessionId' },
+      then: ['load-user-data'],
+      catch: ['require-auth'],
+    },
+    'load-user-data': { fn: 'load-user-data' },
+    'require-auth': { fn: 'require-auth' },
+  },
 }
 ```
 
@@ -171,11 +165,11 @@ Path strings are resolved literally — `$context.character[$data.characterType]
 literal key. For dynamic property access, use `$expression` with the `property` operator:
 
 ```ts
-// ❌ literal path — picks key "$data.characterType", not its value
-;['eq', '$context.character[$data.characterType]', 'warrior'][
-  // ✅ $expression — resolves $data.characterType first, then accesses the property
-  ('eq', { $expression: ['property', '$context.character', '$data.characterType'] }, 'warrior')
-  ]
+const byType: ConditionExpression = [
+  'eq',
+  { $expression: ['property', '$context.character', '$data.characterType'] },
+  'warrior',
+]
 ```
 
 Built-in expression
@@ -219,21 +213,25 @@ const flow = createFlow<Context, Patch, Events>(
 )
 
 const { validation } = flow.start()
-if (!validation.ok) throw new Error(validation.issues.map((i) => `[${i.code}] ${i.message}`).join('\n'))
 
-// Later
-const result = await flow.runner.run('worker.tick', context, input)
+if (validation.ok) {
+  const result = await flow.runner.run('worker.tick', context, input)
+
+  console.log(result.status)
+} else {
+  throw new Error(validation.errors.map(({ code, message }) => `[${code}] ${message}`).join('\n'))
+}
 ```
 
-`start()` registers actions/conditions, validates, loads config. Failed validation → bindings not
-installed. `stop({ force: true })` aborts active runs.
+`createFlow()` registers the supplied actions/conditions. `start()` validates and loads config, then installs bindings.
+Failed validation leaves bindings inactive. `stop({ force: true })` aborts active runs.
 
 ## Concurrency
 
 Each binding supports five modes. Default is `parallel`.
 
 | Mode       | Behaviour                                                                                    |
-|------------|----------------------------------------------------------------------------------------------|
+| ---------- | -------------------------------------------------------------------------------------------- |
 | `parallel` | every event starts a new run concurrently                                                    |
 | `latest`   | aborts the previous run in the same lane, starts a new one                                   |
 | `queue`    | queues up to `maxQueueSize` (default 50), runs FIFO                                          |
@@ -291,31 +289,28 @@ actions.
 
 ```ts
 // in condition args or $expression
-;['eq', '$variables.API_VERSION', '2']
-{
-  $expression: ['at', '$variables.CONTRACTS', '$input.index']
-}
+const versionMatches: ConditionExpression = ['eq', '$variables.API_VERSION', '2']
+const selectedContract = { $expression: ['at', '$variables.CONTRACTS', '$input.index'] }
 ```
 
-**`$template`** builds a string from interpolated parts with optional fallbacks:
+**`$template`** interpolates scoped paths and immutable variables. Variable fallbacks use `${NAME:-fallback}`:
 
 ```ts
-{
-  $template: 'Hello, {{ context.user.name }}! You have {{ data.count || 0 }} messages.'
-}
+const greeting = { $template: 'Hello, {{ context.user.name }}! API: ${API_VERSION:-unknown}.' }
 ```
 
 - `{{ path }}` reads runtime data (compatibility shorthand).
 - `{{ data.path }}`, `{{ context.path }}`, `{{ input.path }}` select source explicitly.
-- `{{ var || fallback }}` provides a default when the variable is missing.
-- `$template` args are resolved recursively, so `$expression` objects work inside.
+- `{{ path }}` values that are nullish become an empty string.
+- `${NAME}` reads an immutable variable; `${NAME:-fallback}` supplies a fallback for missing, nullish, or empty values.
+- Use an existing `$expression` with `coalesce` when a scoped value needs a fallback. `{{ var || fallback }}` is not supported.
 
 ## Lifecycle events
 
 Published through the configured bus:
 
 | Topic                     | Payload                                              |
-|---------------------------|------------------------------------------------------|
+| ------------------------- | ---------------------------------------------------- |
 | `slapflow.run.started`    | run metadata                                         |
 | `slapflow.run.finished`   | run result                                           |
 | `slapflow.run.failed`     | error + result                                       |
@@ -339,35 +334,45 @@ bus.on('slapflow.run.failed', ({ parsed }) => {
 
 ```ts
 // Action — plain async function receiving ActionArgs
-const findNextAction = async ({ context, input, data, runtime }: ActionArgs<Context>) => {
-  const job = await db.jobs.findNext(context.worker.id)
-  if (!job) return { type: 'skip', reason: 'no-job' }
-  return { data: { jobId: job.id }, context: { worker: { ...context.worker, currentJob: job.id } } }
+const findNextAction: Action<Context> = async ({ context: { worker } }) => {
+  const job = await db.jobs.findNext(worker.id)
+
+  if (job) {
+    worker.currentJob = job.id
+
+    return { data: { jobId: job.id } }
+  }
+
+  return { type: 'skip', reason: 'no-job' }
 }
 
 // Condition — sync function returning boolean
-const isAllowed = ({ context }: ActionArgs<Context>) => context.user.role === 'admin'
+const isAllowed: ConditionFn<Context> = ({
+  context: {
+    user: { role },
+  },
+}) => role === 'admin'
 ```
 
 Register via `createFlow` options or `runner.registerAction`/`registerCondition`. Built-ins cannot be overridden.
 
 ### Action return normalization
 
-| Return                                            | Outcome                                  |
-|---------------------------------------------------|------------------------------------------|
-| `undefined` / `null`                              | `success`                                |
-| `false`                                           | `skipped`                                |
-| `{ type: 'skip', reason?, data? }`                | `skipped` (selector tries next)          |
-| `{ type: 'stop', reason?, patch?, events? }`      | `stopped`                                |
-| `{ type: 'fail', reason?, data?, error? }`        | `failed` (catch runs)                    |
-| `{ context?, data?, patch?, events?, continue? }` | `success`; `continue: false` halts chain |
+| Return                                            | Outcome                                                   |
+| ------------------------------------------------- | --------------------------------------------------------- |
+| `undefined` / `null`                              | `success`                                                 |
+| `false`                                           | `skipped`                                                 |
+| `{ type: 'skip', reason?, data? }`                | `skipped` (selector tries next)                           |
+| `{ type: 'stop', reason?, patch?, events? }`      | `stopped`                                                 |
+| `{ type: 'fail', reason?, data?, error? }`        | `failed` (catch runs)                                     |
+| `{ context?, data?, patch?, events?, continue? }` | `success`; `continue: false` skips this strategy's `then` |
 
 ## `when` vs `ensure` vs action vs `runtime.fail`
 
 Four layers, each with a distinct job:
 
 | Layer              | Where                  | What it checks                                                                                      | Result on mismatch                          |
-|--------------------|------------------------|-----------------------------------------------------------------------------------------------------|---------------------------------------------|
+| ------------------ | ---------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | **`when`**         | strategy               | immediately available fields — routing discriminator                                                | `skipped` (selector tries next)             |
 | **`ensure`**       | strategy (`when` root) | input invariant — required field, valid shape                                                       | `failed` → `catch`, **no** `onError`        |
 | **action**         | leaf function          | search, computation, domain state that needs reading/mutating                                       | `skip` for "no match" normal outcome        |
@@ -384,44 +389,36 @@ inline `{ strategy, when }`. Set branch-specific context on a named strategy of 
 ## Runtime helpers (inside actions)
 
 ```ts
-runtime.get(path)              // read nested context
-runtime.set(path, value)       // write nested context
-runtime.data.get(path)         // read chain-local data
-runtime.data.set(path, value)  // write chain-local data
-runtime.variables.get(path)    // read immutable variables
-runtime.resolve(value)         // resolve $context.*, $data.*, $input.*, $variables.*, $expression, {{template}}
-runtime.signal                 // AbortSignal for cancellation
-runtime.emit(event)            // append event
-runtime.patch(patch)           // append patch
-runtime.stop(reason ?)          // return ActionStop
-runtime.fail(reason ?, data ?)   // return ActionFail
-runtime.executeThen()          // run this strategy's `then` branch
-runtime.executeCatch()         // run this strategy's `catch` branch
-runtime.enqueue(entrypoint, input, { pool, key?, coalesceToken? }) // place a run into a named pool (when pools configured)
+runtime.get(path) // read nested context
+runtime.set(path, value) // write nested context
+runtime.data.get(path) // read chain-local data
+runtime.data.set(path, value) // write chain-local data
+runtime.variables.get(path) // read immutable variables
+runtime.resolve(value) // resolve $context.*, $data.*, $input.*, $variables.*, $expression, {{template}}
+runtime.signal // AbortSignal for cancellation
+runtime.emit(event) // append event
+runtime.patch(patch) // append patch
+runtime.stop(reason) // return ActionStop
+runtime.fail(reason, data) // return ActionFail
+runtime.executeThen({ input }) // run `then` with a temporary input; omit the argument to keep current input
+runtime.executeCatch() // run this strategy's `catch` branch
+runtime.enqueue(entrypoint, input, { pool, key, coalesceToken }) // place a run into a named pool (when pools configured)
 ```
 
 ## Guards
 
 ```ts
-guards: {
-  'has-colony'
-:
-  ['truthy', '$data.colonyId'],
-    'same-colony'
-:
-  ['eq', '$input.colonyId', '$context.colonyId'],
-}
-,
-strategies: {
-  'colony.join'
-:
-  {
-    fn: 'colony.join',
-      when
-  :
-    ['and', ['guard', 'has-colony'], ['not', ['guard', 'same-colony']]],
-  }
-,
+const config: Config = {
+  guards: {
+    'has-colony': ['truthy', '$data.colonyId'],
+    'same-colony': ['eq', '$input.colonyId', '$context.colonyId'],
+  },
+  strategies: {
+    'colony.join': {
+      fn: 'colony.join',
+      when: ['and', ['guard', 'has-colony'], ['not', ['guard', 'same-colony']]],
+    },
+  },
 }
 ```
 
@@ -491,7 +488,7 @@ const flow = createFlow({ config, actions, conditions }, { context, bus, trace: 
 - **`when`/`action`/`fail` have distinct roles** — see "`when` vs action vs `runtime.fail`" above.
 - **Branching = selector, not `catch`.** `catch` fires only on `fail`/throw. Domain "didn't work" is normal → use
   selector.
-- **`terminal: true`** stops the chain after that strategy even on `success`.
+- **`terminal: true`** skips this strategy's `then` after its action; it does not stop a parent sequence from continuing. Use `core.stop` to stop the run.
 - **Context is mutable and shared** — mutate synchronously; no `await` between reading and writing the same field.
 
-Full reference: `SPEC.md` (this repo).
+Full references: [SPEC.md](../../SPEC.md), [SPEC-RU.md](../../SPEC-RU.md), and [README-RU.md](../../README-RU.md).

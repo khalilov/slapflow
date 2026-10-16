@@ -31,6 +31,7 @@ describe('registry', () => {
   it('lists every built-in condition', () => {
     assert.deepEqual(BUILTIN_CONDITIONS.map(([name]) => name).sort(), [
       'changed',
+      'contains',
       'cooldownReady',
       'empty',
       'eq',
