@@ -53,10 +53,33 @@ const config: Config = {
 }
 ```
 
-- `entrypoints`: map entrypoint name → starting strategy.
+- `entrypoints`: named application entrance → starting strategy.
 - `guards`: reusable `when` expressions, referenced by `['guard', name]`.
 - `types`: optional allowed types by field name, applied only to fields read by conditions.
 - `strategies`: each has `fn` (action name), optional `when`, `then`, `catch`, `mode`, `terminal`, `props`.
+
+## Entrypoints and application contracts
+
+An entrypoint is a real, named entrance to a logical part of the application. It names the scenario a caller starts;
+strategies describe its implementation steps. `entrypoints: { 'order.submit': 'order.validate' }` declares the
+application entry `order.submit`, starting at `order.validate`. The entry name is part of the application's calling
+contract. Identical entry and strategy names do not make the entry redundant.
+
+- Preserve declared entrypoints and their callers. Do not treat entries as redundant aliases, inline their targets
+  into bindings, or replace them with direct strategy calls merely to shorten configuration or simplify a graph.
+- Changing or removing an application entry requires an explicit user request covering that contract change.
+  Changing a strategy's implementation alone does not authorize changing the entry contract.
+- Support all three routes: `entry → strategy`, `event → strategy`, and `event → entry → strategy`. An event is a
+  trigger, an entrypoint is an application entrance, and a strategy is an execution step.
+- Direct strategy execution remains valid alongside named entries. Do not require an entrypoint for every strategy
+  or event.
+
+`runner.run`, `runner.runSync`, a binding's `entrypoint`, and `runtime.enqueue` accept an entry name or strategy key.
+Resolution checks `config.entrypoints` first, then direct strategy keys. Entries target existing strategies and
+cannot chain to other entries. A named entry adds no action and does not restrict direct strategy execution.
+
+Examples: [README](https://github.com/khalilov/slapflow/blob/main/README.md#entrypoints-and-application-logic),
+[README-RU](https://github.com/khalilov/slapflow/blob/main/README-RU.md#точки-входа-в-логику-приложения).
 
 ## Execution modes
 

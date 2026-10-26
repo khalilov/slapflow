@@ -9,6 +9,9 @@ Slapflow takes care of orchestration, concurrency, cancellation, and diagnostics
 
 ![Flow](flow.png)
 
+> 🤖 Coding agent? Load the [Slapflow skill](https://github.com/khalilov/slapflow/blob/main/skills/slapflow/SKILL.md).\
+> Need every edge case? Open the [full specification](https://github.com/khalilov/slapflow/blob/main/SPEC.md).
+
 ## Why use it?
 
 - **Keep the business flow visible.** Put a scenario in one chain instead of hiding it among UI handlers, transport callbacks, and service code.

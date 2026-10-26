@@ -9,6 +9,9 @@ Slapflow берёт на себя порядок выполнения, конк�
 
 ![Граф обработки команд в slapflow-studio](flow.png)
 
+> 🤖 Coding agent? Load the [Slapflow skill](https://github.com/khalilov/slapflow/blob/main/skills/slapflow/SKILL.md).\
+> Need every edge case? Open the [full specification](https://github.com/khalilov/slapflow/blob/main/SPEC-RU.md).
+
 ## Когда он пригодится
 
 - **Когда важен сам сценарий, а не инфраструктура вокруг него.** Цепочка показывает бизнес-поток целиком, вместо того чтобы прятать его среди UI-обработчиков и транспортного кода.

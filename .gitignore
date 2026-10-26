@@ -3,6 +3,7 @@
 dist
 build
 node_modules
+readme
 **/*.tgz
 coverage
 *.log
