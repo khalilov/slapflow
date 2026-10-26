@@ -1,3 +1,4 @@
+import { each } from 'objwalk'
 import { type Config, type ValidationIssue } from '~/types'
 import { getNextTarget } from '~/helpers/validation/getNextTarget'
 
@@ -37,5 +38,11 @@ export const detectCycles = (config: Config, errors: ValidationIssue[], warnings
     return false
   }
 
-  Object.keys(config.strategies ?? {}).forEach((id) => visit(id, []))
+  each(
+    config.strategies ?? {},
+    (id) => {
+      visit(id, [])
+    },
+    { shallow: true }
+  )
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { createFlow, createPubSub, type Bus, type EventMap } from '~/index'
+import { createFlow, createPubSub, type Bus, type BusBinding, type EventMap } from '~/index'
 
 type Context = {
   requestId: string
@@ -13,6 +13,44 @@ type Events = {
 const flush = async (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
 describe('flow', () => {
+  it('uses one binding snapshot for validation and installation', () => {
+    const bus = createPubSub<Record<string, Record<string, unknown>>>()
+    const received: string[] = []
+    const binding = Object.defineProperty({ entrypoint: 'original' }, 'options', {
+      get: () => {
+        events['[bus] source'] = { entrypoint: 'replacement' }
+        events['[bus] later'] = { entrypoint: 'replacement' }
+        return undefined
+      },
+    })
+    const events: Record<`[bus] ${string}`, BusBinding> = { '[bus] source': binding }
+    const flow = createFlow(
+      {
+        events,
+        config: {
+          strategies: {
+            original: { fn: 'capture', props: { label: 'original' } },
+            replacement: { fn: 'capture', props: { label: 'replacement' } },
+          },
+        },
+        actions: {
+          capture: ({ props: { label } }) => {
+            received.push(String(label))
+          },
+        },
+      },
+      { bus, context: {} }
+    )
+    const started = flow.start()
+
+    bus.emit('source', {})
+    bus.emit('later', {})
+    flow.stop()
+    assert.equal(started.validation.ok, true)
+    assert.deepEqual(started.active, ['[bus] source'])
+    assert.deepEqual(received, ['original'])
+  })
+
   it('runs a configured entrypoint when a bound bus event is emitted', () => {
     const bus = createPubSub<Events>()
     const received: Array<{ context: Context; input: Events['form.submit'] }> = []

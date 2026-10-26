@@ -1,3 +1,4 @@
+import { each } from 'objwalk'
 import {
   type Action,
   type ConditionFn,
@@ -55,7 +56,13 @@ export const createRunner = <TContext, TPatch = unknown>(
   }
 
   const registerActions = (items: Record<string, Action<TContext, TPatch>>): void => {
-    Object.entries(items).forEach(([name, action]) => registerAction(name, action))
+    each(
+      items,
+      (name, action) => {
+        registerAction(name, action)
+      },
+      { shallow: true }
+    )
   }
 
   const registerCondition = (name: string, condition: ConditionFn<TContext>): void => {
@@ -63,7 +70,13 @@ export const createRunner = <TContext, TPatch = unknown>(
   }
 
   const registerConditions = (items: Record<string, ConditionFn<TContext>>): void => {
-    Object.entries(items).forEach(([name, condition]) => registerCondition(name, condition))
+    each(
+      items,
+      (name, condition) => {
+        registerCondition(name, condition)
+      },
+      { shallow: true }
+    )
   }
 
   const validateConfig = (target = configRef.current): ValidationResult => {

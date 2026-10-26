@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0]
+
+### Added
+
+- A shared frozen `tools` toolkit backed by objwalk in every action, with the original 12 functions
+  and their inferred overloads. Exported `tools` and `Tools` support direct
+  action calls without a separate objwalk import. Runner-managed actions receive
+  `tools` automatically; callers constructing `ActionArgs` include the exported value.
+
+### Changed
+
+- Updated objwalk to `^1.9.0`. Direct shallow each/map now handle registrations,
+  pools, validation, guard resolution, property resolution and trace redaction.
+- JSON parsing and serialization use objwalk with the existing string-frame,
+  error-envelope and exception propagation contracts. Error stage cleanup uses
+  each/flush; object size uses pick. Specialized cloning and shallow data merging
+  retain their existing policies.
+
 ## [2.1.0]
 
 ### Added

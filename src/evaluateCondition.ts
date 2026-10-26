@@ -1,3 +1,4 @@
+import { each } from 'objwalk'
 import {
   type ConditionEvaluationOptions,
   type ConditionExpression,
@@ -42,10 +43,14 @@ export const evaluateCondition = <TContext>(
   }
 
   try {
-    if (register !== undefined) {
-      for (const [name, condition] of Object.entries(conditions)) {
-        register(name, condition)
-      }
+    if (conditions instanceof Map === false && register !== undefined) {
+      each(
+        conditions,
+        (name, condition) => {
+          register(name, condition)
+        },
+        { shallow: true }
+      )
     }
     validateCondition(expression, strategy ?? '', path, registry, errors, { allowEnsure: true })
 

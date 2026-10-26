@@ -25,6 +25,8 @@ import {
   catchError,
   EnqueueError,
   PoolError,
+  tools,
+  type Tools,
 } from 'slapflow'
 ```
 
@@ -358,6 +360,40 @@ export const config = {
 
 `terminal: true` не запускает `then` текущей стратегии после успешного действия; `continue: false` в `ActionSuccess` даёт тот же эффект. Родительская `sequence` при этом может продолжить выполнение следующих целей. Для остановки всего запуска используйте `core.stop`.
 
+## Операции над объектами внутри actions
+
+В `ActionArgs<TContext>` добавлено обязательное поле `tools: Tools`. Один
+замороженный набор передаётся actions разных runs и flows в пределах загруженного
+экземпляра пакета, включая ветки catch, parallel и вызовы через core.invoke.
+Тот же объект `tools` и его выведенный тип `Tools` экспортируются из пакета.
+
+Набор состоит из `pick`, `set`, `flush`, `extract`, `each`, `map`, `merge`,
+`clone`, `equally`, `diff`, `parse`, `stringify`. Это исходные функции objwalk:
+их перегрузки и обработка ошибок сохраняются, привязки к context нет. Входные
+данные не замораживаются. Исключения внутри action проходят по существующему пути
+`ACTION_THROWN`/catch/error reporting. Набор не добавляется в config, context,
+props, trace и события. Контракты conditions и expression operators не расширены.
+
+```ts
+const clearPreview: Action<Context> = ({ context: { cache }, tools: { flush } }) => {
+  flush(cache, ['preview', 'stale'])
+}
+```
+
+Для непосредственных элементов используйте `{ shallow: true }`. `each` сохраняет
+выведенные типы ключей и значений и останавливается на callback `false`. `map`
+сохраняет ключи и записывает результаты callback, включая `false`, `null` и
+`undefined`; фильтрации и аргумента-накопителя нет. `parse` возвращает `unknown`,
+`stringify` — `string | undefined`. Проверки формата данных остаются задачей
+приложения.
+
+При ручном вызове action передайте экспортированный `tools` в самостоятельно
+собранный `ActionArgs`. Старые callbacks, исполняемые runner, менять не требуется.
+
+`runtime.set` и `runtime.data.set` сохраняют ограничения жизненного цикла run.
+Сырые `tools.set/merge/flush` меняют переданный action объект как обычные
+импорты библиотеки: проверки runtime, variables и типов к ним не добавляются.
+
 ## Вспомогательные средства среды выполнения
 
 ```ts
@@ -474,7 +510,7 @@ const flow = createFlow(
 ;['eq', { $expression: ['property', '$context.character', '$data.characterType'] }, 'warrior']
 ```
 
-**Элемент массива** — выбор элемента по рантайм-индексу:
+**Элемент массива** — выбор элемента по runtime-индексу:
 
 ```ts
 {
@@ -558,7 +594,7 @@ const config = {
 }
 ```
 
-Guard — это обычное `ConditionExpression`, и сам может ссылаться на другие guards. Ссылки раскрываются один раз при загрузке конфигурации (`loadConfig`), до того как рантайм что-либо вычисляет, поэтому рантайм никогда не видит узел `['guard', ...]`. Guards раскрываются рекурсивно через `and`/`or`/`not`; ссылка на несуществующий guard даёт ошибку валидации `GUARD_NOT_FOUND`, а взаимные ссылки — `GUARD_CYCLE`. Значение guard должно быть выражением-условием, а не строкой `$path`.
+Guard — это обычное `ConditionExpression`, и сам может ссылаться на другие guards. Ссылки раскрываются один раз при загрузке конфигурации (`loadConfig`), до того как runtime что-либо вычисляет, поэтому runtime никогда не видит узел `['guard', ...]`. Guards раскрываются рекурсивно через `and`/`or`/`not`; ссылка на несуществующий guard даёт ошибку валидации `GUARD_NOT_FOUND`, а взаимные ссылки — `GUARD_CYCLE`. Значение guard должно быть выражением-условием, а не строкой `$path`.
 
 Guards существуют, чтобы критерий истинности жил в одном месте, а не дублировался по стратегиям; это вычисляемые данные, а не зарегистрированный код (в отличие от `registerCondition`, который регистрирует функцию-оператор).
 

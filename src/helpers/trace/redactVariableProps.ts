@@ -1,3 +1,4 @@
+import { map } from 'objwalk'
 import { dependsOnVariables } from '~/helpers/trace/dependsOnVariables'
 import { isVariableRef } from '~/helpers/path/isVariableRef'
 import { isRecord } from '~/helpers/type/isRecord'
@@ -14,10 +15,10 @@ export const redactVariableProps = (raw: unknown, resolved: unknown): unknown =>
     return '[REDACTED]'
   }
   if (Array.isArray(raw) && Array.isArray(resolved)) {
-    return raw.map((item, index) => redactVariableProps(item, resolved[index]))
+    return map(raw, (index, item: unknown) => redactVariableProps(item, resolved[index]), { shallow: true })
   }
   if (isRecord(raw) && isRecord(resolved)) {
-    return Object.fromEntries(Object.entries(raw).map(([key, item]) => [key, redactVariableProps(item, resolved[key])]))
+    return map(raw, (key, item: unknown) => redactVariableProps(item, resolved[key]), { shallow: true })
   }
 
   return resolved

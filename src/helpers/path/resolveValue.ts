@@ -1,3 +1,4 @@
+import { map } from 'objwalk'
 import { type ResolveScope } from '~/helpers/path/resolveScope'
 import { childPath } from '~/helpers/path/childPath'
 import { evaluateExpression } from '~/evaluateExpression'
@@ -17,7 +18,7 @@ export const resolveValue = <TContext>(
     return resolvePathReference(value, scope, path)
   }
   if (Array.isArray(value)) {
-    return value.map((item, index) => resolveValue(item, scope, childPath(path, index)))
+    return map(value, (index, item: unknown) => resolveValue(item, scope, childPath(path, index)), { shallow: true })
   }
   if (!isRecord(value)) {
     return value

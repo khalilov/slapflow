@@ -1,23 +1,28 @@
+import { each } from 'objwalk'
 import { type Pool, type PoolOptions } from '~/types'
 import { createPool } from '~/helpers/pool/createPool'
 
 export const createInitialPools = (pools: Record<string, PoolOptions>): Map<string, Pool> => {
   const byName = new Map<string, Pool>()
 
-  for (const [name, options] of Object.entries(pools)) {
-    byName.set(
-      name,
-      createPool({
+  each(
+    pools,
+    (name, { workers, maxQueueSize, overflow, events, eventsMinIntervalMs }) => {
+      byName.set(
         name,
-        named: true,
-        workers: options.workers,
-        maxQueueSize: options.maxQueueSize ?? Infinity,
-        overflow: options.overflow ?? 'wait',
-        events: options.events ?? 'off',
-        eventsMinIntervalMs: options.eventsMinIntervalMs ?? 0,
-      })
-    )
-  }
+        createPool({
+          name,
+          named: true,
+          workers,
+          maxQueueSize: maxQueueSize ?? Infinity,
+          overflow: overflow ?? 'wait',
+          events: events ?? 'off',
+          eventsMinIntervalMs: eventsMinIntervalMs ?? 0,
+        })
+      )
+    },
+    { shallow: true }
+  )
 
   return byName
 }

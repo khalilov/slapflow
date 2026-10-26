@@ -1,4 +1,5 @@
 import { type ActionResult, type Input, type Props } from '~/types'
+import { tools } from '~/helpers/tools'
 import { SyncAsyncError } from '~/helpers/errors/syncAsyncError'
 import { afterAction } from '~/helpers/runner/afterAction'
 import { slapError } from '~/helpers/errors/slapError'
@@ -200,7 +201,7 @@ export const executeStrategy = <TContext, TPatch>(
 
   state.stepCounter.current += 1
   const invoke = (): ActionResult<TContext, TPatch> | Promise<ActionResult<TContext, TPatch>> =>
-    action({ context: state.context, props, input: state.input, signal: state.signal, runtime })
+    action({ context: state.context, props, input: state.input, signal: state.signal, runtime, tools })
 
   const actionThrown = (cause: unknown): Normalized<TContext, TPatch> | Promise<Normalized<TContext, TPatch>> => {
     if (isTimedOut(state.startedAt, environment.options.timeout)) {

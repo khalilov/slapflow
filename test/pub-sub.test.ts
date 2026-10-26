@@ -112,6 +112,75 @@ describe('pub/sub', () => {
     assert.equal('error' in (event.parsed as Record<string, unknown>), true)
   })
 
+  it('reports the original serialization cause once before delivering the error body', () => {
+    const cause = new Error('toJSON failed')
+    const order: string[] = []
+    const errors: unknown[] = []
+    const bus = createPubSub<Record<string, unknown>>({
+      onError: ({ type, error }) => {
+        if (type === 'serialization') {
+          errors.push(error)
+          order.push('error')
+        }
+      },
+    })
+    const payload = {
+      toJSON: () => {
+        throw cause
+      },
+    }
+
+    bus.on('broken', ({ parsed, serialized }) => {
+      order.push('subscriber')
+      assert.deepEqual(parsed, { error: 'toJSON failed' })
+      assert.equal(serialized, '{"error":"toJSON failed"}')
+    })
+    bus.emit('broken', payload)
+    assert.deepEqual(order, ['error', 'subscriber'])
+    assert.deepEqual(errors, [cause])
+  })
+
+  it('serializes successful payloads once and preserves scalar JSON results', () => {
+    let calls = 0
+    const bus = createPubSub<Record<string, unknown>>()
+    const payload = {
+      toJSON: () => {
+        calls += 1
+        return { calls }
+      },
+    }
+    const event = bus.emit('value', payload)
+
+    assert.equal(calls, 1)
+    assert.equal(event.parsed, payload)
+    assert.equal(event.serialized, '{"calls":1}')
+    assert.equal(bus.emit('value', false).serialized, 'false')
+    assert.equal(bus.emit('value', 0).serialized, '0')
+    assert.equal(bus.emit('value', null).serialized, 'null')
+    assert.equal(bus.emit('value', '').serialized, '""')
+  })
+
+  it('keeps non-serializable root values on the existing error-envelope path', () => {
+    const errors: unknown[] = []
+    const bus = createPubSub<Record<string, unknown>>({
+      onError: ({ type, error }) => {
+        if (type === 'serialization') {
+          errors.push(error)
+        }
+      },
+    })
+    const values = [undefined, () => undefined, Symbol('value'), 1n]
+
+    for (const value of values) {
+      const event = bus.emit('broken', value)
+
+      assert.ok(event.parsed !== null && typeof event.parsed === 'object' && 'error' in event.parsed)
+      assert.equal(typeof event.parsed.error, 'string')
+      assert.equal(event.serialized, JSON.stringify(event.parsed))
+    }
+    assert.equal(errors.length, values.length)
+  })
+
   it('dispatches a validated external event without changing its envelope', () => {
     const bus = createPubSub<AppEvents>()
     const received: unknown[] = []

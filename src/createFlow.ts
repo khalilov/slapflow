@@ -1,3 +1,4 @@
+import { each, map, pick } from 'objwalk'
 import {
   type BindingEventMap,
   type Bus,
@@ -34,6 +35,8 @@ import { resolvePoolKey } from '~/helpers/pool/resolvePoolKey'
 const busBindingPrefix = '[bus] '
 const domBindingPrefix = '[dom] '
 const defaultMaxQueueSize = 50
+
+type FlowBindings = Record<string, BusBinding | DomBinding>
 
 type ActiveRun = {
   controller: AbortController
@@ -483,11 +486,15 @@ export const createFlow = <TContext, TPatch = unknown, TEvents extends object = 
     const form = collectForm(element)
     const dataset: Record<string, string> = {}
     if (element instanceof HTMLElement) {
-      for (const [key, item] of Object.entries(element.dataset)) {
-        if (item !== undefined) {
-          dataset[key] = item
-        }
-      }
+      each(
+        element.dataset,
+        (key, item) => {
+          if (item !== undefined) {
+            dataset[key] = item
+          }
+        },
+        { shallow: true }
+      )
     }
     return {
       type: event.type,
@@ -544,109 +551,114 @@ export const createFlow = <TContext, TPatch = unknown, TEvents extends object = 
     return active
   }
 
-  const validatePools = (
-    bindings: [string, BusBinding | DomBinding][]
-  ): { errors: ValidationIssue[]; warnings: ValidationIssue[] } => {
+  const validatePools = (bindings: FlowBindings): { errors: ValidationIssue[]; warnings: ValidationIssue[] } => {
     const errors: ValidationIssue[] = []
     const warnings: ValidationIssue[] = []
     const declared = options.pools ?? {}
     const poolScopedFields = ['maxQueueSize', 'overflow', 'events', 'eventsMinIntervalMs'] as const
 
-    for (const [name, poolOptions] of Object.entries(declared)) {
-      if (!Number.isInteger(poolOptions.workers) || poolOptions.workers <= 0) {
-        errors.push({
-          code: 'POOL_WORKERS_INVALID',
-          message: `Pool "${name}" requires a positive integer "workers"`,
-          path: `pools.${name}.workers`,
-        })
-      }
-    }
-
-    for (const [binding, target] of bindings) {
-      const concurrency = (target as SchedulableBinding).options?.concurrency
-
-      if (!concurrency) {
-        continue
-      }
-      if (concurrency.pool !== undefined) {
-        if (declared[concurrency.pool] === undefined) {
+    each(
+      declared,
+      (name, { workers }) => {
+        if (Number.isInteger(workers) === false || workers <= 0) {
           errors.push({
-            code: 'POOL_NOT_FOUND',
-            message: `Binding "${binding}" references missing pool "${concurrency.pool}"`,
-            path: binding,
+            code: 'POOL_WORKERS_INVALID',
+            message: `Pool "${name}" requires a positive integer "workers"`,
+            path: `pools.${name}.workers`,
           })
         }
-        if (concurrency.mode !== 'workers') {
-          errors.push({
-            code: 'POOL_MODE_INVALID',
-            message: `Binding "${binding}" references pool "${concurrency.pool}" but its mode is not "workers"`,
-            path: binding,
-          })
-        }
-        const duplicates = poolScopedFields.filter((field) => concurrency[field] !== undefined)
+      },
+      { shallow: true }
+    )
 
-        if (duplicates.length > 0) {
-          warnings.push({
-            code: 'POOL_FIELDS_IGNORED',
-            message: `Binding "${binding}" duplicates ${duplicates.join(', ')}; the pool definition wins`,
-            path: binding,
-          })
-        }
-      } else if (concurrency.mode === 'workers') {
-        if (!(
-          typeof concurrency.workers === 'number' &&
-          Number.isInteger(concurrency.workers) &&
-          concurrency.workers > 0
-        )) {
-          errors.push({
-            code: 'WORKERS_REQUIRED',
-            message: `Binding "${binding}" uses mode "workers" without "pool" and a positive "workers"`,
-            path: binding,
-          })
-        }
-      } else {
-        if (concurrency.workers !== undefined) {
-          warnings.push({
-            code: 'WORKERS_IGNORED',
-            message: `Binding "${binding}" sets "workers" without mode "workers"; it is ignored`,
-            path: binding,
-          })
-        }
-        if (concurrency.key !== undefined && typeof concurrency.key !== 'function') {
-          warnings.push({
-            code: 'KEY_IGNORED',
-            message: `Binding "${binding}" uses a declarative "key" without mode "workers"; only a function is supported by "${concurrency.mode ?? 'parallel'}"`,
-            path: binding,
-          })
-        }
-        if (concurrency.coalesce !== undefined && concurrency.coalesce !== null) {
-          warnings.push({
-            code: 'COALESCE_IGNORED',
-            message: `Binding "${binding}" uses "coalesce" without mode "workers"; it is ignored`,
-            path: binding,
-          })
-        }
-      }
+    each(
+      bindings,
+      (binding, { options }) => {
+        const concurrency = options?.concurrency
 
-      if (concurrency.key !== undefined && concurrency.key !== null && !isValidPoolKey(concurrency.key)) {
-        errors.push({
-          code: 'KEY_INVALID',
-          message: `Binding "${binding}" must use "$input.<path>", "$expression", or a function as "key"`,
-          path: binding,
-        })
-      }
-      if (
-        concurrency.coalesce !== undefined &&
-        concurrency.coalesce !== null &&
-        !isValidPoolKey(concurrency.coalesce)
-      ) {
-        errors.push({
-          code: 'KEY_INVALID',
-          message: `Binding "${binding}" must use "$input.<path>", "$expression", or a function as "coalesce"`,
-          path: binding,
-        })
-      }
-    }
+        if (concurrency) {
+          if (concurrency.pool !== undefined) {
+            const duplicates = poolScopedFields.filter((field) => concurrency[field] !== undefined)
+
+            if (declared[concurrency.pool] === undefined) {
+              errors.push({
+                code: 'POOL_NOT_FOUND',
+                message: `Binding "${binding}" references missing pool "${concurrency.pool}"`,
+                path: binding,
+              })
+            }
+            if (concurrency.mode !== 'workers') {
+              errors.push({
+                code: 'POOL_MODE_INVALID',
+                message: `Binding "${binding}" references pool "${concurrency.pool}" but its mode is not "workers"`,
+                path: binding,
+              })
+            }
+            if (duplicates.length > 0) {
+              warnings.push({
+                code: 'POOL_FIELDS_IGNORED',
+                message: `Binding "${binding}" duplicates ${duplicates.join(', ')}; the pool definition wins`,
+                path: binding,
+              })
+            }
+          } else if (concurrency.mode === 'workers') {
+            if (!(
+              typeof concurrency.workers === 'number' &&
+              Number.isInteger(concurrency.workers) &&
+              concurrency.workers > 0
+            )) {
+              errors.push({
+                code: 'WORKERS_REQUIRED',
+                message: `Binding "${binding}" uses mode "workers" without "pool" and a positive "workers"`,
+                path: binding,
+              })
+            }
+          } else {
+            if (concurrency.workers !== undefined) {
+              warnings.push({
+                code: 'WORKERS_IGNORED',
+                message: `Binding "${binding}" sets "workers" without mode "workers"; it is ignored`,
+                path: binding,
+              })
+            }
+            if (concurrency.key !== undefined && typeof concurrency.key !== 'function') {
+              warnings.push({
+                code: 'KEY_IGNORED',
+                message: `Binding "${binding}" uses a declarative "key" without mode "workers"; only a function is supported by "${concurrency.mode ?? 'parallel'}"`,
+                path: binding,
+              })
+            }
+            if (concurrency.coalesce !== undefined && concurrency.coalesce !== null) {
+              warnings.push({
+                code: 'COALESCE_IGNORED',
+                message: `Binding "${binding}" uses "coalesce" without mode "workers"; it is ignored`,
+                path: binding,
+              })
+            }
+          }
+
+          if (concurrency.key !== undefined && concurrency.key !== null && !isValidPoolKey(concurrency.key)) {
+            errors.push({
+              code: 'KEY_INVALID',
+              message: `Binding "${binding}" must use "$input.<path>", "$expression", or a function as "key"`,
+              path: binding,
+            })
+          }
+          if (
+            concurrency.coalesce !== undefined &&
+            concurrency.coalesce !== null &&
+            !isValidPoolKey(concurrency.coalesce)
+          ) {
+            errors.push({
+              code: 'KEY_INVALID',
+              message: `Binding "${binding}" must use "$input.<path>", "$expression", or a function as "coalesce"`,
+              path: binding,
+            })
+          }
+        }
+      },
+      { shallow: true }
+    )
 
     if (options.concurrency?.mode === 'workers' || options.concurrency?.pool !== undefined) {
       errors.push({
@@ -655,7 +667,7 @@ export const createFlow = <TContext, TPatch = unknown, TEvents extends object = 
         path: 'concurrency',
       })
     }
-    if (Object.keys(declared).length > 0 && typeof options.context !== 'function') {
+    if (pick(declared, '{*}').length > 0 && typeof options.context !== 'function') {
       warnings.push({
         code: 'CONTEXT_NOT_FACTORY',
         message: 'Pools are configured but "context" is not a function; concurrent runs share one context object',
@@ -676,7 +688,16 @@ export const createFlow = <TContext, TPatch = unknown, TEvents extends object = 
     const validation = runner.loadConfig(definition.config)
     const active: string[] = []
     const inactive: StartResult['inactive'] = []
-    const bindings = Object.entries(definition.events ?? {}) as [string, BusBinding | DomBinding][]
+    const bindings = map(
+      definition.events ?? {},
+      (_binding, target) => {
+        if (target !== undefined) {
+          return target
+        }
+        throw new TypeError('Event binding must be defined')
+      },
+      { shallow: true }
+    )
     const poolValidation = validatePools(bindings)
     const merged = {
       ok: validation.ok && poolValidation.errors.length === 0,
@@ -685,20 +706,24 @@ export const createFlow = <TContext, TPatch = unknown, TEvents extends object = 
     }
 
     if (merged.ok) {
-      for (const [binding, target] of bindings) {
-        if (binding.startsWith(busBindingPrefix)) {
-          subscribeBusBinding(binding as BusBindingKey<TEvents>, target as BusBinding)
-          active.push(binding)
-        } else if (binding.startsWith(domBindingPrefix)) {
-          if (subscribeDomBinding(binding as DomBindingKey, target as DomBinding)) {
+      each(
+        bindings,
+        (binding, target) => {
+          if (binding.startsWith(busBindingPrefix)) {
+            subscribeBusBinding(binding as BusBindingKey<TEvents>, target as BusBinding)
             active.push(binding)
+          } else if (binding.startsWith(domBindingPrefix)) {
+            if (subscribeDomBinding(binding as DomBindingKey, target as DomBinding)) {
+              active.push(binding)
+            } else {
+              inactive.push({ binding, reason: 'dom-unavailable' })
+            }
           } else {
-            inactive.push({ binding, reason: 'dom-unavailable' })
+            inactive.push({ binding, reason: 'unsupported-source' })
           }
-        } else {
-          inactive.push({ binding, reason: 'unsupported-source' })
-        }
-      }
+        },
+        { shallow: true }
+      )
     }
 
     return { active, inactive, validation: merged }

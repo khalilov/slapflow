@@ -3,6 +3,7 @@ import { describe, it } from 'vitest'
 import { createRunner } from '~/createRunner'
 import { createFlow } from '~/createFlow'
 import { createPubSub } from '~/createPubSub'
+import { type Config } from '~/types'
 
 describe('guards', () => {
   it('reports a missing guard', () => {
@@ -85,6 +86,29 @@ describe('guards', () => {
     flow.stop()
 
     assert.deepEqual(matched, ['colony-1'])
+  })
+
+  it('keeps dotted strategy names, false guards and the supplied config intact', () => {
+    const config: Config = {
+      guards: { 'gate.closed': false, 'gate.open': true },
+      entrypoints: { 'job.start': 'job.closed' },
+      strategies: {
+        'job.closed': { fn: 'core.patch', when: ['guard', 'gate.closed'], props: { patch: 'closed' } },
+        'job.open': { fn: 'core.patch', when: ['guard', 'gate.open'], props: { patch: 'open' } },
+      },
+    }
+    const original = structuredClone(config)
+    const runner = createRunner()
+    const validation = runner.loadConfig(config)
+    const closed = runner.runSync('job.start', {})
+    const open = runner.runSync('job.open', {})
+
+    assert.equal(validation.ok, true)
+    assert.equal(closed.status, 'skipped')
+    assert.deepEqual(closed.patches, [])
+    assert.equal(open.status, 'success')
+    assert.deepEqual(open.patches, ['open'])
+    assert.deepEqual(config, original)
   })
 
   it('evaluates a contains guard through the runner', async () => {

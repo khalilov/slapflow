@@ -49,7 +49,7 @@ class FakeWebSocket {
     this.dispatch('open')
   }
 
-  message(data: string): void {
+  message(data: unknown): void {
     this.dispatch('message', { data })
   }
 
@@ -89,6 +89,45 @@ describe('createWebSocket', () => {
 
     assert.deepEqual(received, ['open:ws://gateway', { type: 'colony:state', payload: { ok: true } }])
     ws.stop()
+  })
+
+  it('preserves text, falsy JSON and binary message values', () => {
+    const bus = createPubSub<Events>()
+    const received: unknown[] = []
+    const binary = Buffer.from('{"binary":true}')
+    const ws = createWebSocket<Events>({ url: 'ws://gateway', bus })
+
+    bus.on('message', ({ parsed }) => received.push(parsed))
+    ws.start()
+    FakeWebSocket.instances[0]?.message('plain text')
+    FakeWebSocket.instances[0]?.message('false')
+    FakeWebSocket.instances[0]?.message('0')
+    FakeWebSocket.instances[0]?.message('null')
+    FakeWebSocket.instances[0]?.message(binary)
+    ws.stop()
+    assert.deepEqual(received, ['plain text', false, 0, null, binary])
+    assert.equal(received[4], binary)
+  })
+
+  it('propagates serialization errors without inventing a bus error envelope', () => {
+    const cause = new Error('message serialization failed')
+    const bus = createPubSub<Events>()
+    const received: unknown[] = []
+    const ws = createWebSocket<Events>({ url: 'ws://gateway', bus })
+
+    bus.on('message', ({ parsed }) => received.push(parsed))
+    ws.start()
+    assert.throws(
+      () =>
+        FakeWebSocket.instances[0]?.message({
+          toJSON: () => {
+            throw cause
+          },
+        }),
+      (error) => error === cause
+    )
+    ws.stop()
+    assert.deepEqual(received, [])
   })
 
   it('buffers sends made before the socket opens and flushes them after', () => {

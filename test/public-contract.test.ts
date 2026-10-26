@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { describe, it } from 'vitest'
 import { createBuiltinActions } from '~/builtins/actions'
 import { createBuiltinConditions } from '~/builtins/conditions'
+import { type Action, type Tools } from '~/index'
 
 describe('public contract', () => {
   it('loads and runs the built package through ESM and CommonJS exports', async () => {
@@ -12,16 +13,30 @@ describe('public contract', () => {
 
     for (const api of modules) {
       const context = { amount: 3 }
+      const toolkits: Tools[] = []
+      const action: Action<typeof context> = ({ context: { amount }, tools, runtime }) => {
+        const mapped = tools.map({ amount }, (_key, value) => value * 2, { shallow: true })
+
+        toolkits.push(tools)
+        runtime.patch(mapped.amount)
+      }
       const flow = api.createFlow(
-        { config: { strategies: { root: { fn: 'core.patch', props: { patch: 'ok' } } } } },
+        {
+          config: { strategies: { root: { fn: 'core.patch', props: { patch: 'ok' } }, tools: { fn: 'tools' } } },
+          actions: { tools: action },
+        },
         { context }
       )
       const { validation } = flow.start()
       const result = flow.runner.runSync('root', context)
+      const tools = flow.runner.runSync('tools', context)
 
       flow.stop()
       assert.equal(validation.ok, true)
       assert.deepEqual(result.patches, ['ok'])
+      assert.deepEqual(tools.patches, [6])
+      assert.equal(toolkits[0], api.tools)
+      assert.equal(Object.isFrozen(api.tools), true)
       assert.deepEqual(api.evaluateCondition(['eq', '$context.amount', 3], { context }), { ok: true, matched: true })
       assert.deepEqual(api.evaluateExpression(['multiply', '$context.amount', 2], { context }), { ok: true, value: 6 })
     }

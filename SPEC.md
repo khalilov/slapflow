@@ -25,6 +25,8 @@ import {
   catchError,
   EnqueueError,
   PoolError,
+  tools,
+  type Tools,
 } from 'slapflow'
 ```
 
@@ -343,6 +345,42 @@ A non-`success` outcome at a step changes what happens next, depending on the mo
 `sequence` is the default mode and interrupts the remaining `then` targets on _any_ non-`success` (`skipped`, `stopped`, `failed`) — not only on failure. A conditional step inside a sequence is therefore a hidden early exit for the whole remainder. When skipping a step must not break the chain, wrap it in a selector with a `core.noop` fallback.
 
 `terminal: true` stops the `then` chain after that strategy even on `success`; `continue: false` in `ActionSuccess` has the same effect.
+
+## Object Helpers in Actions
+
+`ActionArgs<TContext>` includes a required `tools: Tools` field. A single
+frozen toolkit is shared across actions, runs and flows within a loaded package
+instance, including actions reached through catch, parallel and invoked branches.
+The package exports the same `tools` value and its inferred `Tools` type.
+
+The fixed toolkit consists of `pick`, `set`, `flush`, `extract`, `each`, `map`,
+`merge`, `clone`, `equally`, `diff`, `parse`, and `stringify`, imported directly
+from objwalk. Their overloads and error behavior are preserved; methods are not
+bound to runtime context. Inputs are not frozen by the toolkit. Toolkit exceptions
+inside an action follow the existing `ACTION_THROWN`/catch/error reporting path.
+The object is not inserted into config, context, props, trace or event envelopes.
+Condition and expression handler contracts are unchanged.
+
+```ts
+const clearPreview: Action<Context> = ({ context: { cache }, tools: { flush } }) => {
+  flush(cache, ['preview', 'stale'])
+}
+```
+
+Use `{ shallow: true }` for immediate entries. `each` preserves inferred key/value
+types and stops on callback `false`. `map` keeps the source keys and uses callback
+return values as results, including `false`, `null` and `undefined`; it does not
+filter entries or accept an accumulator. `parse` returns `unknown`, and `stringify`
+returns `string | undefined`. Application input validation still belongs to the
+application.
+
+Direct action callers must provide `tools` in their constructed `ActionArgs`;
+the exported value supports this without a separate objwalk import. Existing runner-managed
+callbacks using the previous fields require no changes.
+
+`runtime.set` and `runtime.data.set` keep their run lifecycle checks. Raw
+`tools.set/merge/flush` operate on the target supplied by the action, just as
+direct library imports do; they do not inherit runtime checks or variable/type rules.
 
 ## Runtime Helpers
 

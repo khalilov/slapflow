@@ -1,4 +1,5 @@
-import { type ConditionExpression, type Config, type Next, type Props } from '~/types'
+import { map } from 'objwalk'
+import { type ConditionExpression, type Config } from '~/types'
 
 export type GuardIssue = {
   code: 'GUARD_NOT_FOUND' | 'GUARD_CYCLE' | 'GUARD_INVALID'
@@ -82,32 +83,33 @@ export const resolveGuards = (config: Config): { config: Config; issues: GuardIs
   }
 
   const resolveNext = (next: NonNullable<Config['strategies'][string]['then']>, prefix: string) =>
-    next.map((item, index) => {
-      if (
-        typeof item === 'string' ||
-        !item ||
-        typeof item !== 'object' ||
-        (item as { when?: unknown }).when === undefined
-      ) {
+    map(
+      next,
+      (index, item) => {
+        if (item !== null && typeof item === 'object' && item.when !== undefined) {
+          const when = resolveWhen(item.when, `${prefix}.${index}.when`)
+
+          return when === undefined ? item : { ...item, when }
+        }
         return item
+      },
+      { shallow: true }
+    )
+
+  const strategies = map(
+    config.strategies,
+    (id, strategy) => {
+      const when = strategy.when === undefined ? undefined : resolveWhen(strategy.when, `${id}.when`)
+
+      return {
+        ...strategy,
+        ...(when !== undefined ? { when } : {}),
+        ...(strategy.then ? { then: resolveNext(strategy.then, `${id}.then`) } : {}),
+        ...(strategy.catch ? { catch: resolveNext(strategy.catch, `${id}.catch`) } : {}),
       }
-      const target = item as { strategy: string; props?: Props; when: ConditionExpression }
-      const when = resolveWhen(target.when, `${prefix}.${index}.when`)
-      return when === undefined ? item : ({ ...target, when } as Next)
-    })
-
-  const strategies: Config['strategies'] = {}
-
-  for (const [id, strategy] of Object.entries(config.strategies)) {
-    const when = strategy.when === undefined ? undefined : resolveWhen(strategy.when, `${id}.when`)
-
-    strategies[id] = {
-      ...strategy,
-      ...(when !== undefined ? { when } : {}),
-      ...(strategy.then ? { then: resolveNext(strategy.then, `${id}.then`) } : {}),
-      ...(strategy.catch ? { catch: resolveNext(strategy.catch, `${id}.catch`) } : {}),
-    }
-  }
+    },
+    { shallow: true }
+  )
 
   return { config: { ...config, strategies }, issues }
 }

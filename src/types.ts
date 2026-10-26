@@ -1,3 +1,5 @@
+import { type Tools } from '~/helpers/tools'
+
 export type Input = Record<string, unknown>
 export type Props = Record<string, unknown>
 
@@ -66,6 +68,7 @@ export type Action<TContext, TPatch = unknown> = (
 ) => ActionResult<TContext, TPatch> | Promise<ActionResult<TContext, TPatch>>
 
 export type ActionArgs<TContext> = {
+  tools: Tools
   context: TContext
   props: Props
   input: Input

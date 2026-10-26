@@ -250,6 +250,29 @@ describe('runtime variables and expressions', () => {
     assert.equal(b.trace?.[0]?.props.escaped, '${SECRET}')
   })
 
+  it('redacts nested trace values while preserving literal keys and array holes', async () => {
+    const props: Props = {
+      'literal.key': { secret: '$variables.SECRET', public: false },
+      list: [, '$variables.SECRET', 0, null, { $template: '\\${SECRET}' }],
+      ['__proto__']: '$variables.SECRET',
+    }
+    const { received, result } = await runProps(props, { trace: true, variables: { SECRET: 'private-value' } })
+
+    assert.equal(result.status, 'success')
+    assert.deepEqual(received, {
+      'literal.key': { secret: 'private-value', public: false },
+      list: [, 'private-value', 0, null, '${SECRET}'],
+      ['__proto__']: 'private-value',
+    })
+    assert.deepEqual(result.trace?.[0]?.props, {
+      'literal.key': { secret: '[REDACTED]', public: false },
+      list: [, '[REDACTED]', 0, null, '${SECRET}'],
+      ['__proto__']: '[REDACTED]',
+    })
+    assert.equal(JSON.stringify(result.trace).includes('private-value'), false)
+    assert.equal(Object.getPrototypeOf(received), Object.prototype)
+  })
+
   it('makes run variables read-only and isolates supplied objects', async () => {
     const supplied = { SETTINGS: { count: 0 } }
     const seen: number[] = []

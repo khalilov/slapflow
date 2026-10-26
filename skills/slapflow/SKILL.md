@@ -17,6 +17,8 @@ Named imports only:
 import {
   createFlow,
   createPubSub,
+  tools,
+  type Tools,
   BUILTIN_ACTIONS,
   BUILTIN_CONDITIONS,
   defineErrorReporter,
@@ -391,6 +393,31 @@ into `catch` quietly.
 
 Declare an entry criterion **once** — on a named strategy, not on every `then`/`catch` edge. Avoid
 inline `{ strategy, when }`. Set branch-specific context on a named strategy of that branch, not on a shared parent.
+
+## Object helpers (inside actions)
+
+Actions receive a required `tools` field in `ActionArgs`; use it without a
+separate objwalk import. It is one frozen readonly object containing the original
+`pick`, `set`, `flush`, `extract`, `each`, `map`, `merge`, `clone`, `equally`,
+`diff`, `parse`, and `stringify` functions, shared across runs and flows.
+
+```ts
+const clearPreview: Action<Context> = ({ context: { cache }, tools: { flush } }) => {
+  flush(cache, ['preview', 'stale'])
+}
+```
+
+Pass objects directly to each/map. Use `{ shallow: true }` for immediate entries;
+key/value types are inferred. `each` stops on callback `false`; `map` returns a
+new object/array under the same keys and uses callback results, including falsy
+values. It has no store argument and does not filter entries. Neither awaits
+async callbacks. `parse` returns unknown; stringify can return undefined.
+
+Raw object mutations do not acquire runtime lifecycle/type/variable checks;
+keep `runtime.set`/`runtime.data.set` for writes that must use those contracts.
+Toolkit exceptions use normal action error handling. Direct action callers must
+include the toolkit; import the same `tools` value and `Tools` type from
+Slapflow when constructing `ActionArgs`. Conditions/expressions do not receive it.
 
 ## Runtime helpers (inside actions)
 

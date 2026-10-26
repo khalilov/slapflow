@@ -105,4 +105,31 @@ describe('resolveValue', () => {
       list: [2, 'Ada'],
     })
   })
+
+  it('preserves literal keys and does not resolve referenced objects a second time', () => {
+    const payload = { literal: '$variables.MISSING' }
+    const raw = {
+      'literal.key': '$input.id',
+      'items[0]': '$data.count',
+      '': '$context.user.name',
+      ['__proto__']: '$data.count',
+      reference: '$input.payload',
+      expression: { $expression: ['property', '$input', 'payload'] },
+    }
+    const resolved = resolveValue(raw, { ...scope, input: { id: 'job-1', payload } })
+
+    assert.deepEqual(resolved, {
+      'literal.key': 'job-1',
+      'items[0]': 2,
+      '': 'Ada',
+      ['__proto__']: 2,
+      reference: payload,
+      expression: payload,
+    })
+    assert.ok(resolved !== null && typeof resolved === 'object' && 'reference' in resolved && 'expression' in resolved)
+    assert.equal(resolved.reference, payload)
+    assert.equal(resolved.expression, payload)
+    assert.equal(Object.getPrototypeOf(resolved), Object.prototype)
+    assert.equal(raw['literal.key'], '$input.id')
+  })
 })

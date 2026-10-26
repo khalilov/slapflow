@@ -1,3 +1,4 @@
+import { each } from 'objwalk'
 import { isRecord } from '~/helpers/type/isRecord'
 import { isValidTypeDeclaration } from '~/helpers/validation/isValidTypeDeclaration'
 import { type ValidationIssue } from '~/types'
@@ -16,13 +17,17 @@ const declarationIssue = (field: string, declaration: unknown): ValidationIssue 
 
 export const validateTypes = (types: unknown, errors: ValidationIssue[]): void => {
   if (isRecord(types)) {
-    for (const [field, declaration] of Object.entries(types)) {
-      const issue = declarationIssue(field, declaration)
+    each(
+      types,
+      (field, declaration) => {
+        const issue = declarationIssue(field, declaration)
 
-      if (issue !== undefined) {
-        errors.push(issue)
-      }
-    }
+        if (issue !== undefined) {
+          errors.push(issue)
+        }
+      },
+      { shallow: true }
+    )
 
     return
   }

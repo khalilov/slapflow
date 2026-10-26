@@ -1,3 +1,4 @@
+import { stringify } from 'objwalk'
 import {
   type Bus,
   type BusErrorEvent,
@@ -91,35 +92,51 @@ export const createPubSub = <TEvents extends object = EventMap>(options: BusOpti
     let event: BusEvent<TEvents[TEvent]>
 
     try {
-      const serialized = JSON.stringify(payload)
-      if (typeof serialized !== 'string') {
+      const serialized = stringify(payload, {
+        onError: (error) => {
+          throw error
+        },
+      })
+
+      if (typeof serialized === 'string') {
+        event = {
+          id: createId(),
+          topic,
+          occurredAt: Date.now(),
+          ...(emitOptions.origin ? { origin: emitOptions.origin } : {}),
+          parsed: payload,
+          serialized,
+        }
+      } else {
         throw new Error('Payload cannot be serialized')
-      }
-      event = {
-        id: createId(),
-        topic,
-        occurredAt: Date.now(),
-        ...(emitOptions.origin ? { origin: emitOptions.origin } : {}),
-        parsed: payload,
-        serialized,
       }
     } catch (error) {
       const parsed = serializeError(error)
-      event = {
-        id: createId(),
-        topic,
-        occurredAt: Date.now(),
-        ...(emitOptions.origin ? { origin: emitOptions.origin } : {}),
-        parsed: parsed as TEvents[TEvent],
-        serialized: JSON.stringify(parsed),
+      const serialized = stringify(parsed, {
+        onError: (error) => {
+          throw error
+        },
+      })
+
+      if (typeof serialized === 'string') {
+        event = {
+          id: createId(),
+          topic,
+          occurredAt: Date.now(),
+          ...(emitOptions.origin ? { origin: emitOptions.origin } : {}),
+          parsed: parsed as TEvents[TEvent],
+          serialized,
+        }
+        options.onError?.({
+          type: 'serialization',
+          topic,
+          payload,
+          ...(emitOptions.origin ? { origin: emitOptions.origin } : {}),
+          error,
+        } as BusErrorEvent<TEvents>)
+      } else {
+        throw new Error('Payload cannot be serialized')
       }
-      options.onError?.({
-        type: 'serialization',
-        topic,
-        payload,
-        ...(emitOptions.origin ? { origin: emitOptions.origin } : {}),
-        error,
-      } as BusErrorEvent<TEvents>)
     }
 
     return dispatch(event) as BusEvent<TEvents[TEvent]>

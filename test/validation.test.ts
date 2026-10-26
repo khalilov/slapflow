@@ -3,6 +3,37 @@ import { describe, it } from 'vitest'
 import { createRunner } from '~/createRunner'
 
 describe('validation', () => {
+  it('rejects null guard dictionaries instead of accepting an empty traversal', () => {
+    const runner = createRunner()
+    const result = runner.validateConfig({ strategies: { root: { fn: 'core.noop' } }, guards: null as never })
+
+    assert.equal(result.ok, false)
+    assert.deepEqual(
+      result.errors.map(({ code, path }) => ({ code, path })),
+      [{ code: 'GUARD_INVALID', path: 'guards' }]
+    )
+  })
+
+  it('continues validation across independent cycles and entrypoints', () => {
+    const runner = createRunner()
+    const result = runner.validateConfig({
+      entrypoints: { 'missing.first': 'first-missing', 'missing.second': 'second-missing' },
+      strategies: {
+        'cycle.first': { fn: 'core.noop', then: ['cycle.first'] },
+        'cycle.second': { fn: 'core.noop', then: ['cycle.second'] },
+      },
+    })
+
+    assert.deepEqual(
+      result.errors.filter(({ code }) => code === 'CYCLE_DETECTED').map(({ strategy }) => strategy),
+      ['cycle.first', 'cycle.second']
+    )
+    assert.deepEqual(
+      result.errors.filter(({ code }) => code === 'STRATEGY_NOT_FOUND').map(({ path }) => path),
+      ['entrypoints.missing.first', 'entrypoints.missing.second']
+    )
+  })
+
   it('catches unknown fn, then target and condition', () => {
     const runner = createRunner()
     const result = runner.validateConfig({

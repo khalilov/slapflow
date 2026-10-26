@@ -1,3 +1,4 @@
+import { stringify } from 'objwalk'
 import {
   type EventMap,
   type SocketEventTopic,
@@ -118,7 +119,11 @@ class WebSocketConnection<TEvents extends object = EventMap> implements WSClient
       occurredAt: Date.now(),
       ...(origin ? { origin } : {}),
       parsed,
-      serialized: JSON.stringify(parsed),
+      serialized: stringify(parsed, {
+        onError: (error) => {
+          throw error
+        },
+      }),
     })
   }
 

@@ -82,6 +82,46 @@ flow.start()
 bus.emit('order.submit', { orderId: 'order-1' }, { origin: 'api' })
 ```
 
+## Entrypoints and application logic
+
+**An entrypoint is a real, named entrance to a logical part of the application, not merely an alias for a strategy.** It identifies the application scenario a caller starts, such as submitting an order or starting a simulation pass. A strategy describes an execution step and its continuation.
+
+`entrypoints: { 'order.submit': 'order.validate' }` declares the application entry `order.submit` and selects `order.validate` as its first implementation step. The entry name is part of the application's calling contract; its target strategy can change as the implementation evolves. Identical entry and strategy names do not make the entry redundant.
+
+Events trigger execution. All three routes are valid:
+
+- `entry → strategy`: a caller starts a named application entry.
+- `event → strategy`: a binding starts a strategy directly.
+- `event → entry → strategy`: a binding starts a named application entry.
+
+**For agents:** preserve declared entrypoints and their callers. Do not delete, inline, or replace entries with direct strategy calls merely to shorten configuration or simplify a graph. Direct strategy execution is supported alongside named entries. Changing or removing an application entry requires an explicit request covering that contract change.
+
+## Object helpers in actions
+
+Every action receives a shared `tools` toolkit alongside `context`, `props`,
+`input`, `signal`, and `runtime`. Use its functions without importing objwalk:
+
+```ts
+const clearPreview = ({ context: { cache }, tools: { flush } }) => {
+  flush(cache, ['preview', 'stale'])
+}
+```
+
+The readonly toolkit contains `pick`, `set`, `flush`, `extract`, `each`, `map`,
+`merge`, `clone`, `equally`, `diff`, `parse`, and `stringify`. These are the original
+objwalk functions. For a single-level walk or mapping, pass `{ shallow: true }`.
+`map` returns transformed values under the same keys; `each` performs visits and
+stops when its callback returns `false`.
+
+`runtime.set(path, value)` writes to the current run's context and observes its
+lifecycle. `tools.set(target, path, value)` mutates the supplied target directly;
+it does not acquire runtime checks. The toolkit object is frozen, not its inputs.
+
+**Migration for direct action calls:** `ActionArgs.tools` is required. If you
+construct action arguments yourself, import the shared `tools` value from
+`slapflow` and include it in the argument object. Existing actions called through
+the runner receive it automatically. The `Tools` type is exported as well.
+
 ## Fetch data with cancellation and retries
 
 `core.fetch` uses the run `AbortSignal`, retries transient failures, and keeps the response available to the next strategy without coupling the flow to a specific HTTP client.
