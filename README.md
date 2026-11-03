@@ -99,6 +99,29 @@ Events trigger execution. All three routes are valid:
 
 **For agents:** preserve declared entrypoints and their callers. Do not delete, inline, or replace entries with direct strategy calls merely to shorten configuration or simplify a graph. Direct strategy execution is supported alongside named entries. Changing or removing an application entry requires an explicit request covering that contract change.
 
+## Strategy timing and configuration snapshots
+
+Enable `trace: true` to inspect the complete time of each strategy invocation:
+
+```ts
+const flow = createFlow({ config, actions }, { context, trace: true })
+
+flow.start()
+console.table((await flow.runner.run('order.submit', context, { orderId: 'order-1' })).timings)
+```
+
+`timings` includes conditions, props, the action and its child branches.
+Use `invocationId` / `parentInvocationId` to reconstruct the tree. Durations are
+inclusive wall time; nested durations must not be summed. The existing
+`trace[].durationMs` keeps its previous measurement boundaries. With trace off, the timing
+array is absent. Existing custom sinks with only `push` remain supported.
+
+`runner.loadConfig(config)` now owns a configuration snapshot. After changing the
+source config, call `loadConfig(config)` again; registration of actions and
+conditions remains dynamic. Cached path/template syntax never caches live values.
+See the [specification](SPEC.md#strategy-timing-with-trace) for a complete profiling
+example and sink error semantics.
+
 ## Object helpers in actions
 
 Every action receives a shared `tools` toolkit alongside `context`, `props`,

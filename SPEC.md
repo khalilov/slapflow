@@ -831,3 +831,173 @@ Defaults:
 Limit failures are returned as failed results with `MAX_STEPS`, `MAX_DEPTH`, and `TIMEOUT` codes.
 
 Set `maxStepCount` or `maxDepth` to `-1` to disable that check. Validation emits a `LIMIT_DISABLED` warning because unbounded runs may execute indefinitely and unbounded nesting may exhaust the call stack.
+
+## Strategy timing with trace
+
+There are two modes, controlled by the existing `trace` option. With trace disabled (the default), the runner does not allocate timing state, span objects or a timing array, does not call `performance.now()` for strategy spans, and omits `RunResult.timings`. With `trace: true` or a custom `TraceSink`, each strategy invocation produces a timing entry. `runSync` remains synchronous.
+
+```ts
+type StrategyTiming = {
+  invocationId: number
+  parentInvocationId: number | null
+  strategy: string
+  depth: number
+  startedAtMs: number
+  durationMs: number
+  status: 'success' | 'skipped' | 'stopped' | 'failed'
+}
+```
+
+`StrategyTiming` is exported from the package root. `RunResult.timings?: StrategyTiming[]` contains completed invocations in completion order. IDs are unique within a run; a root has `parentInvocationId: null`. Build the tree from IDs, not array positions. Parent IDs belong to the branch environment, so parallel children share their actual parent. An invocation that recovers through `catch` records its final result status. A transition rejected before entering a strategy has no entry.
+
+`startedAtMs` is the offset from run timing initialization, measured with `performance.now()`. `durationMs` is inclusive wall time: props, conditions, action, `then`/`catch` and Promise waits. A timeout span ends when the runner invocation ends, without waiting for the original action to settle. Existing `TraceEntry.durationMs`, order, data snapshots and variable redaction retain their previous semantics.
+
+`TraceSink` accepts optional `pushTiming(entry: StrategyTiming): void`; existing sinks with only `push` still work and timing entries remain available in the run result. A timing entry is committed once before delivery to `pushTiming`. If `pushTiming` throws, its original exception propagates to the caller outside the action error/catch path, without changing the completed action outcome, retrying the action or recording a duplicate span. Ancestors still finalize their own spans. If finalizing an already thrown/rejected invocation also throws, its original error is preserved. The run is closed and its external abort listener is detached even when delivery throws; retained runtime writes and branch execution remain blocked after completion. The policy for existing `push` is unchanged.
+
+Trace adds time and memory overhead and can expose snapshots; span fields themselves contain no input, props or variables. Wall time is not CPU time. Nested durations must not be added together; parallel spans can overlap. Do not derive self time by subtracting children. Helpers inside actions are not individually visible. Grouping is consumer code, not an additional public aggregator:
+
+```ts
+const totals = new Map<string, { count: number; total: number; mean: number; max: number; skipped: number }>()
+
+for (const { strategy, durationMs, status } of result.timings ?? []) {
+  const row = totals.get(strategy) ?? { count: 0, total: 0, mean: 0, max: 0, skipped: 0 }
+
+  row.count += 1
+  row.total += durationMs
+  row.mean = row.total / row.count
+  row.max = Math.max(row.max, durationMs)
+  row.skipped += Number(status === 'skipped')
+  totals.set(strategy, row)
+}
+console.table([...totals].map(([strategy, row]) => ({ strategy, ...row })))
+```
+
+### Trace execution cost
+
+Trace is diagnostic work on the execution path, not free telemetry. It adds clocks,
+trace records, props redaction, shallow data snapshots, strategy spans and result
+arrays. Both `trace: true` and a custom sink enable `TraceEntry` and
+`StrategyTiming`; an empty sink does not bypass their construction. The current
+API does not offer a timings-only mode.
+
+An illustrative benchmark of the 2.3.0 implementation on **2026-11-03**, using
+**Bun 1.3.14, Apple M1 Pro, darwin arm64** and objwalk **1.10.0**, measured the
+following median CPU cost for sequential `runner.run` calls:
+
+| Strategy invocations per run | Trace off, µs/run | Memory trace, µs/run | Extra CPU |
+| ---------------------------- | ----------------- | -------------------- | --------- |
+| 1                            | 0.687             | 1.011                | +47%      |
+| 16                           | 4.043             | 8.300                | +105%     |
+| 128                          | 29.488            | 74.314               | +152%     |
+| 512                          | 115.918           | 346.601              | +199%     |
+
+Each graph has one root and the remaining invocations as its sequential children,
+all executing `() => undefined`. Props, data, input and context are empty; there
+are no conditions or I/O. Creation/loading of the runner is excluded. CPU is
+process user+system, including normal GC/JIT work, not the wall time stored in
+spans. Two passes in opposite order produced 14 measured batches per combination;
+`runSync` and a custom sink were also measured: 48 processes and 336 batches total.
+These are batch-derived costs, not individual-run latency percentiles.
+
+For the 16–512 invocation cases, memory trace added approximately **0.27–0.45 µs
+of CPU per invocation**. At 512 invocations, +199% means roughly **2.99×** the
+CPU cost with trace off. A custom sink with empty `push` and `pushTiming`, without
+`entries` or external I/O, still added **123%** at 128 invocations and **130%** at
+512: strategy timings remain collected in the run result.
+
+These figures are an example, not a performance guarantee or an upper bound.
+Larger props/data add redaction and snapshot work; heavier actions may reduce the
+relative percentage while trace still adds absolute cost. Logging, serialization,
+network delivery and retaining trace history in consumer code add their own costs
+and were excluded. Retained memory/RSS was not measured separately.
+
+For a low-overhead execution path, keep the default `trace: false`. Enable tracing
+on the runner/flow instances used for diagnosis and budget for its cost if it
+remains enabled under load. Measure representative graphs and data in both modes
+on the target runtime and hardware; do not treat instrumented strategy wall times
+as the CPU cost of untraced production execution.
+
+## Loaded configuration ownership
+
+`runner.loadConfig(config)` takes an owned snapshot of the configuration data, isolated from caller mutations and resolves guards in that snapshot. The caller's object is not frozen. Changes to the original strategies, props, conditions, transitions, entrypoints or type declarations take effect only after another `loadConfig` call. Function values retain their identity and captured external state; function closures are not copied.
+
+The runner reuses successful structural validation of condition arrays from its owned snapshot. It never caches condition outcomes, resolved values, type checks, action lookup or errors. Loading another config or successfully registering a condition invalidates the validation cache. `registerAction` and `registerCondition` remain dynamic. A loaded invalid config retains the existing run-time failure behavior, including current strategy/path diagnostics; invalid conditions are not cached as valid.
+
+Public `evaluateCondition` always validates its supplied arguments, including repeated calls with the same mutable expression. The private runner cache is not a public evaluation option. Live scope values, short-circuit behavior, `ensure` routing and trace semantics are unchanged.
+
+The owned graph is private to the runner and is not mutated during execution. Type declarations are deeply frozen because custom conditions can retain `scope.types`; internal condition arrays do not need `Object.freeze` to preserve snapshot ownership.
+
+## End-to-end timing and reload example
+
+This graph skips the notification until the input is ready. Run it with trace on
+to observe both admitted and skipped invocations, then reload a modified source
+config. `context`, `input` and resolved templates remain live on each run:
+
+```ts
+import { createFlow, type Config } from 'slapflow'
+
+const messages: string[] = []
+const context = { user: { name: 'Ada' } }
+const config: Config = {
+  entrypoints: { 'notification.send': 'notify-flow' },
+  strategies: {
+    'notify-flow': { fn: 'core.sequence', then: ['notify', 'done'] },
+    notify: {
+      fn: 'notify',
+      when: ['truthy', '$input.ready'],
+      props: { message: { $template: 'Hello, {{ context.user.name }}!' } },
+    },
+    done: { fn: 'core.noop' },
+  },
+}
+const flow = createFlow(
+  {
+    config,
+    actions: {
+      notify: ({ props: { message } }) => {
+        messages.push(String(message))
+      },
+    },
+  },
+  { context, trace: true }
+)
+
+let skipped: Awaited<ReturnType<typeof flow.runner.run>>
+let sent: Awaited<ReturnType<typeof flow.runner.run>>
+let reloaded: Awaited<ReturnType<typeof flow.runner.run>>
+
+flow.start()
+skipped = await flow.runner.run('notification.send', context, { ready: false })
+sent = await flow.runner.run('notification.send', context, { ready: true })
+
+config.strategies.notify!.props = { message: { $template: 'Welcome, {{ context.user.name }}!' } }
+flow.runner.loadConfig(config)
+reloaded = await flow.runner.run('notification.send', context, { ready: true })
+
+console.table(sent.timings)
+console.log(skipped.status, reloaded.status, messages)
+// skipped, success, ['Hello, Ada!', 'Welcome, Ada!']
+```
+
+The first result contains a skipped `notify` span; the second contains a successful
+one whose template reads `Ada`. Changing the source props affects only the third
+run because it follows `loadConfig`. Check load validation before running in
+application code. Use the aggregation example above to group these spans; do not
+sum parent and child totals as a whole-run duration.
+
+### Syntax caching and compatibility
+
+Scoped references and parsed template syntax use separate private module-level
+FIFO caches, each bounded at 1024 source strings. Hits do not refresh insertion
+order. Template parts are immutable and contain only syntax; values are resolved
+from the current context/input/data/variables every time. Invalid template syntax
+may be remembered, but the diagnostic is built anew for the current strategy and
+config path. Variable fallback, escaping, missing-variable errors and type checks
+keep their existing behavior. Cache eviction changes only parsing cost.
+
+Without trace, built-in `when` conditions can reject a strategy before constructing
+the full action runtime. Props are still resolved before `when`, so missing-variable
+errors are not hidden by a false condition. Custom conditions keep the full runtime;
+traced runs preserve the original runtime construction and action timing order.
+No action return shape, public patches/events array or custom iterable contract is
+changed by the internal allocation fast paths.

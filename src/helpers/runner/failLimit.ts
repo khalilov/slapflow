@@ -8,6 +8,4 @@ export const failLimit = <TContext, TPatch>(
 ): Normalized<TContext, TPatch> => ({
   status: 'failed',
   error: slapError(code, message, { strategy: id, stage: { phase: 'limit', strategy: id } }),
-  patches: [],
-  events: [],
 })

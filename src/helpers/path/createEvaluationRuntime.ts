@@ -6,11 +6,11 @@ import { resolveValue } from '~/helpers/path/resolveValue'
 import { terminalFieldName } from '~/helpers/path/terminalFieldName'
 import { assertFieldType } from '~/helpers/type/assertFieldType'
 
+export type EvaluationRuntime = Required<Pick<Runtime, 'get' | 'data' | 'variables' | 'resolve'>>
+
 type EvaluationRuntimeScope<TContext> = ResolveScope<TContext> & { closed?: boolean }
 
-export const createEvaluationRuntime = <TContext>(
-  scope: EvaluationRuntimeScope<TContext>
-): Pick<Runtime, 'get' | 'data' | 'variables' | 'resolve'> => ({
+export const createEvaluationRuntime = <TContext>(scope: EvaluationRuntimeScope<TContext>): EvaluationRuntime => ({
   get: (path) =>
     scope.types === undefined
       ? pick(scope.context as Record<string, unknown>, path)

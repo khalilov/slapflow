@@ -79,6 +79,10 @@ describe('runtime field types in conditions', () => {
     const result = evaluateCondition(['and', ['mutate'], ['exists', '$context.userId']], { context, types }, options)
 
     assert.equal(result.ok, false)
+    context.userId = 'warm'
+    assert.deepEqual(evaluateCondition(['exists', '$context.userId'], { context, types }), { ok: true, matched: true })
+    context.userId = 42
+    assert.equal(evaluateCondition(['exists', '$context.userId'], { context, types }).ok, false)
     if ('error' in result) {
       assert.equal(result.error.code, 'TYPE_MISMATCH')
     }

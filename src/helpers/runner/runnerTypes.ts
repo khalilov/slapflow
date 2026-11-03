@@ -6,6 +6,7 @@ import {
   type PoolScheduler,
   type RunnerOptions,
   type TraceSink,
+  type StrategyTiming,
   type Variables,
 } from '~/types'
 import { type ActionsRegistry } from '~/helpers/actions'
@@ -17,19 +18,32 @@ export type Normalized<TContext, TPatch> =
       context?: TContext
       data?: Record<string, unknown>
       continue?: boolean
-      patches: TPatch[]
-      events: [] | SlapEvent[]
+      patches?: TPatch[] | undefined
+      events?: [] | SlapEvent[] | undefined
     }
-  | { status: 'skipped'; reason?: string; data?: Record<string, unknown>; patches: TPatch[]; events: [] }
-  | { status: 'stopped'; reason?: string; patches: TPatch[]; events: [] | SlapEvent[] }
+  | {
+      status: 'skipped'
+      reason?: string
+      data?: Record<string, unknown>
+      patches?: TPatch[] | undefined
+      events?: [] | undefined
+    }
+  | { status: 'stopped'; reason?: string; patches?: TPatch[] | undefined; events?: [] | SlapEvent[] | undefined }
   | {
       status: 'failed'
       error: SlapError
       data?: Record<string, unknown>
       handled?: boolean
-      patches: TPatch[]
-      events: []
+      patches?: TPatch[] | undefined
+      events?: [] | undefined
     }
+
+export type TraceTimingState = {
+  nextInvocationId: number
+  startedAt: number
+  entries: StrategyTiming[]
+  sinkFailure?: { cause: unknown }
+}
 
 export type RunState<TContext, TPatch> = {
   context: TContext
@@ -46,6 +60,7 @@ export type RunState<TContext, TPatch> = {
   reportedErrors: SlapError[]
   variables: Variables
   expressions: Record<string, import('~/types').ExpressionOperator>
+  traceTiming?: TraceTimingState
   traceSink?: TraceSink
   scheduler?: PoolScheduler | undefined
   pool?: string | undefined
@@ -53,6 +68,8 @@ export type RunState<TContext, TPatch> = {
 }
 
 export type RunnerEnvironment<TContext, TPatch> = {
+  validatedConditions: WeakSet<object>
+  parentInvocationId?: number
   registry: {
     actions: ActionsRegistry<TContext, TPatch>
     conditions: ConditionsRegistry<TContext>

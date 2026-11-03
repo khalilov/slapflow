@@ -5,8 +5,6 @@ export const skippedResult = <TContext, TPatch>(
   data?: Record<string, unknown>
 ): Normalized<TContext, TPatch> => ({
   status: 'skipped',
-  patches: [],
-  events: [],
   ...(reason ? { reason } : {}),
   ...(data ? { data } : {}),
 })

@@ -6,12 +6,34 @@ import { createResolutionError } from '~/helpers/path/createResolutionError'
 import { pathReferenceRegex } from '~/helpers/path/pathReferenceRegex'
 import { protectedPickOptions } from '~/helpers/path/protectedPickOptions'
 
-export const resolvePathReference = <TContext>(value: string, scope: ResolveScope<TContext>, path: string): unknown => {
-  const match = value.match(pathReferenceRegex)
+type PathReference = {
+  root: 'context' | 'data' | 'input' | 'variables'
+  nestedPath: string
+  terminalFieldName: string | undefined
+}
 
-  if (match) {
-    const root = match[1] as 'context' | 'data' | 'input' | 'variables'
-    const nestedPath = match[2] ?? ''
+const references = new Map<string, PathReference | null>()
+const referenceLimit = 1_024
+
+export const resolvePathReference = <TContext>(value: string, scope: ResolveScope<TContext>, path: string): unknown => {
+  let reference = references.get(value)
+
+  if (reference === undefined) {
+    const match = value.match(pathReferenceRegex)
+    const nestedPath = match?.[2] ?? ''
+    const oldest = references.keys().next()
+
+    reference = match
+      ? { root: match[1] as PathReference['root'], nestedPath, terminalFieldName: terminalFieldName(nestedPath) }
+      : null
+    if (references.size >= referenceLimit && oldest.done === false) {
+      references.delete(oldest.value)
+    }
+    references.set(value, reference)
+  }
+
+  if (reference !== null) {
+    const { root, nestedPath } = reference
 
     if (root === 'variables') {
       const source = scope.variables ?? {}
@@ -36,7 +58,7 @@ export const resolvePathReference = <TContext>(value: string, scope: ResolveScop
         source && typeof source === 'object' ? pick(source as Record<string, unknown>, nestedPath) : undefined
 
       return scope.types !== undefined && (root === 'context' || root === 'input')
-        ? assertFieldType(resolved, terminalFieldName(nestedPath), `${root}.${nestedPath}`, scope)
+        ? assertFieldType(resolved, reference.terminalFieldName, `${root}.${nestedPath}`, scope)
         : resolved
     }
 

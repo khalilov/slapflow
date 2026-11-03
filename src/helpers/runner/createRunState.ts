@@ -15,23 +15,36 @@ export type RunStateArgs<TContext> = {
   traceSink?: TraceSink | undefined
 }
 
-export const createRunState = <TContext, TPatch>(args: RunStateArgs<TContext>): RunState<TContext, TPatch> => ({
-  context: args.context,
-  input: args.input,
+export const createRunState = <TContext, TPatch>({
+  context,
+  input,
+  sync,
+  variables,
+  expressions,
+  cancellation: { controller },
+  scheduler,
+  pool,
+  binding,
+  traceSink,
+}: RunStateArgs<TContext>): RunState<TContext, TPatch> => ({
+  context,
+  input,
   data: {},
   patches: [],
   events: [],
   stepCounter: { current: 0 },
   startedAt: Date.now(),
-  sync: args.sync,
-  signal: args.cancellation.controller.signal,
-  abort: () => args.cancellation.controller.abort(),
+  sync,
+  signal: controller.signal,
+  abort: () => controller.abort(),
   closed: false,
   reportedErrors: [],
-  variables: args.variables,
-  expressions: args.expressions,
-  scheduler: args.scheduler,
-  pool: args.pool,
-  binding: args.binding,
-  ...(args.traceSink ? { traceSink: args.traceSink } : {}),
+  variables,
+  expressions,
+  scheduler,
+  pool,
+  binding,
+  ...(traceSink !== undefined
+    ? { traceSink, traceTiming: { nextInvocationId: 1, startedAt: performance.now(), entries: [] } }
+    : {}),
 })

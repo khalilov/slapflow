@@ -1,28 +1,7 @@
-import { type ActionResult, type Input, type Props } from '~/types'
-import { tools } from '~/helpers/tools'
-import { SyncAsyncError } from '~/helpers/errors/syncAsyncError'
-import { afterAction } from '~/helpers/runner/afterAction'
-import { slapError } from '~/helpers/errors/slapError'
-import { cloneData } from '~/helpers/trace/cloneData'
-import { createRuntime } from '~/helpers/runner/createRuntime'
-import { defaultMaxDepth, defaultMaxStepCount } from '~/helpers/runner/runnerDefaults'
-import { evaluateCondition } from '~/evaluateCondition'
-import { executeSequence } from '~/helpers/runner/executeSequence'
-import { executeThen } from '~/helpers/runner/executeThen'
-import { failLimit } from '~/helpers/runner/failLimit'
-import { handleFailure } from '~/helpers/runner/handleFailure'
-import { runCatch } from '~/helpers/runner/runCatch'
+import { type Props, type StrategyTiming } from '~/types'
+import { executeStrategyBody } from '~/helpers/runner/executeStrategyBody'
+import { finishStrategyTiming } from '~/helpers/runner/finishStrategyTiming'
 import { isPromiseLike } from '~/helpers/runner/isPromiseLike'
-import { pushTrace } from '~/helpers/runner/pushTrace'
-import { resolveValue } from '~/helpers/path/resolveValue'
-import { withErrorStage } from '~/helpers/errors/withErrorStage'
-import { ResolutionError } from '~/helpers/path/ResolutionError'
-import { EnqueueError } from '~/helpers/errors/EnqueueError'
-import { redactVariableProps } from '~/helpers/trace/redactVariableProps'
-import { toRuntimeResult } from '~/helpers/runner/toRuntimeResult'
-import { isTimedOut } from '~/helpers/runner/isTimedOut'
-import { raceTimeout } from '~/helpers/runner/raceTimeout'
-import { timeoutResult } from '~/helpers/runner/timeoutResult'
 import { type Normalized, type RunState, type RunnerEnvironment } from '~/helpers/runner/runnerTypes'
 
 export const executeStrategy = <TContext, TPatch>(
@@ -32,267 +11,48 @@ export const executeStrategy = <TContext, TPatch>(
   state: RunState<TContext, TPatch>,
   environment: RunnerEnvironment<TContext, TPatch>
 ): Normalized<TContext, TPatch> | Promise<Normalized<TContext, TPatch>> => {
-  const config = environment.configRef.current
-  if (!config) {
-    return {
-      status: 'failed',
-      error: slapError('CONFIG_INVALID', 'No config loaded', { stage: { phase: 'entrypoint' } }),
-      patches: [],
-      events: [],
-    }
-  }
-  const maxDepth = environment.options.maxDepth ?? defaultMaxDepth
-  if (maxDepth !== -1 && depth > maxDepth) {
-    return failLimit<TContext, TPatch>('MAX_DEPTH', `Max depth exceeded at strategy "${id}"`, id)
-  }
-  const maxStepCount = environment.options.maxStepCount ?? environment.options.maxSteps ?? defaultMaxStepCount
-  if (maxStepCount !== -1 && state.stepCounter.current >= maxStepCount) {
-    return failLimit<TContext, TPatch>('MAX_STEPS', `Max steps exceeded at strategy "${id}"`, id)
-  }
-  if (isTimedOut(state.startedAt, environment.options.timeout)) {
-    return timeoutResult<TContext, TPatch>(environment.options.timeout, id)
-  }
+  const { traceTiming, traceSink } = state
 
-  const strategy = config.strategies[id]
-  if (!strategy) {
-    return {
-      status: 'failed',
-      error: slapError('STRATEGY_NOT_FOUND', `Strategy "${id}" is not defined`, {
-        strategy: id,
-        stage: { phase: 'entrypoint', strategy: id, depth },
-      }),
-      patches: [],
-      events: [],
-    }
-  }
-  const action = environment.registry.actions.get(strategy.fn)
-  if (!action) {
-    return {
-      status: 'failed',
-      error: slapError('ACTION_NOT_FOUND', `Action "${strategy.fn}" is not registered`, {
-        strategy: id,
-        fn: strategy.fn,
-        stage: {
-          phase: 'action',
-          strategy: id,
-          fn: strategy.fn,
-          mode: strategy.mode,
-          depth,
-          step: state.stepCounter.current + 1,
-        },
-      }),
-      patches: [],
-      events: [],
-    }
-  }
-
-  const rawProps = { ...(strategy.props ?? {}), ...extraProps }
-  let props: Props
-  try {
-    props = resolveValue(rawProps, {
-      ...state,
+  if (traceTiming !== undefined) {
+    const { nextInvocationId } = traceTiming
+    const startedAt = performance.now()
+    const entry: StrategyTiming = {
+      invocationId: nextInvocationId,
+      parentInvocationId: environment.parentInvocationId ?? null,
       strategy: id,
-      configPath: `strategies.${id}.props`,
-    }) as Props
-  } catch (cause) {
-    if (!(cause instanceof ResolutionError)) {
-      throw cause
-    }
-    return handleFailure(
-      withErrorStage(cause.slapError, {
-        phase: 'action',
-        strategy: id,
-        fn: strategy.fn,
-        mode: strategy.mode,
-        depth,
-        step: state.stepCounter.current + 1,
-      }),
-      strategy,
       depth,
-      state,
-      environment
-    )
-  }
-  const traceProps = redactVariableProps(rawProps, props) as Props
-  const runtime = createRuntime(state, {
-    executeThen: async (options) => {
-      if (!options || !('input' in options)) {
-        return toRuntimeResult(await executeThen(strategy, depth, state, environment))
-      }
-      const previous = state.input
+      startedAtMs: startedAt - traceTiming.startedAt,
+      durationMs: 0,
+      status: 'failed',
+    }
+    const branchEnvironment = { ...environment, parentInvocationId: nextInvocationId }
+    const complete = (result: Normalized<TContext, TPatch>): Normalized<TContext, TPatch> => {
+      entry.status = result.status
+      finishStrategyTiming(entry, startedAt, traceTiming, traceSink)
 
-      state.input = options.input as Input
+      return result
+    }
+    const failed = (cause: unknown): never => {
       try {
-        return toRuntimeResult(await executeThen(strategy, depth, state, environment))
-      } finally {
-        state.input = previous
-      }
-    },
-    executeCatch: strategy.catch?.length
-      ? async () => toRuntimeResult(await executeSequence(strategy.catch!, depth, state, environment))
-      : async () => undefined,
-  })
-  const dataBefore = cloneData(state.data)
-  const traceStep = state.stepCounter.current + 1
-  const startedAt = Date.now()
-
-  const condition = evaluateCondition(
-    strategy.when,
-    {
-      ...state,
-      runtime,
-      strategy: id,
-      types: config.types,
-    },
-    {
-      conditions: environment.registry.conditions,
-      expressions: state.expressions,
-    }
-  )
-  if (!condition.ok) {
-    return handleFailure(
-      withErrorStage(condition.error, {
-        phase: 'condition',
-        strategy: id,
-        fn: strategy.fn,
-        mode: strategy.mode,
-        depth,
-        step: traceStep,
-      }),
-      strategy,
-      depth,
-      state,
-      environment
-    )
-  }
-  if (!condition.matched) {
-    if (condition.ensure) {
-      pushTrace(
-        state,
-        traceStep,
-        depth,
-        id,
-        strategy,
-        'failed',
-        traceProps,
-        dataBefore,
-        startedAt,
-        'ensure did not match'
-      )
-      if (strategy.catch?.length) {
-        return runCatch(strategy, depth, state, environment)
+        finishStrategyTiming(entry, startedAt, traceTiming, traceSink)
+      } catch {
+        // Preserve the invocation error through ancestor action handlers too.
+        traceTiming.sinkFailure = { cause }
       }
 
-      return {
-        status: 'failed',
-        error: slapError('ENSURE_FAILED', `ensure condition did not match at strategy "${id}"`, {
-          strategy: id,
-          fn: strategy.fn,
-          stage: { phase: 'condition', strategy: id, fn: strategy.fn, mode: strategy.mode, depth, step: traceStep },
-        }),
-        patches: [],
-        events: [],
-      }
-    }
-
-    pushTrace(state, traceStep, depth, id, strategy, 'skipped', traceProps, dataBefore, startedAt)
-    return { status: 'skipped', reason: 'when condition did not match', patches: [], events: [] }
-  }
-
-  state.stepCounter.current += 1
-  const invoke = (): ActionResult<TContext, TPatch> | Promise<ActionResult<TContext, TPatch>> =>
-    action({ context: state.context, props, input: state.input, signal: state.signal, runtime, tools })
-
-  const actionThrown = (cause: unknown): Normalized<TContext, TPatch> | Promise<Normalized<TContext, TPatch>> => {
-    if (isTimedOut(state.startedAt, environment.options.timeout)) {
-      return timeoutResult<TContext, TPatch>(environment.options.timeout, id)
-    }
-
-    return handleFailure(
-      cause instanceof ResolutionError || cause instanceof EnqueueError
-        ? withErrorStage(cause.slapError, {
-            phase: 'action',
-            strategy: id,
-            fn: strategy.fn,
-            mode: strategy.mode,
-            depth,
-            step: traceStep,
-          })
-        : slapError('ACTION_THROWN', `Action "${strategy.fn}" threw`, {
-            strategy: id,
-            fn: strategy.fn,
-            cause,
-            stage: { phase: 'action', strategy: id, fn: strategy.fn, mode: strategy.mode, depth, step: traceStep },
-          }),
-      strategy,
-      depth,
-      state,
-      environment
-    )
-  }
-
-  try {
-    const raw = invoke()
-    if (isPromiseLike(raw)) {
-      if (state.sync) {
-        throw new SyncAsyncError(
-          slapError('ASYNC_IN_SYNC_RUN', `Strategy "${id}" returned a Promise`, {
-            strategy: id,
-            fn: strategy.fn,
-            stage: { phase: 'action', strategy: id, fn: strategy.fn, mode: strategy.mode, depth, step: traceStep },
-          })
-        )
-      }
-      let timedOut = false
-      const complete = raw
-        .then((value) => {
-          if (timedOut || isTimedOut(state.startedAt, environment.options.timeout)) {
-            return timeoutResult<TContext, TPatch>(environment.options.timeout, id)
-          }
-
-          return afterAction(
-            value,
-            id,
-            strategy,
-            depth,
-            state,
-            traceProps,
-            dataBefore,
-            traceStep,
-            startedAt,
-            environment
-          )
-        })
-        .catch((cause) => {
-          if (timedOut || isTimedOut(state.startedAt, environment.options.timeout)) {
-            return timeoutResult<TContext, TPatch>(environment.options.timeout, id)
-          }
-
-          return actionThrown(cause)
-        })
-      const timeout = environment.options.timeout
-
-      if (timeout !== undefined && timeout > 0) {
-        return raceTimeout(complete, timeout, state.startedAt, () => {
-          timedOut = true
-          state.closed = true
-          state.abort()
-
-          return timeoutResult<TContext, TPatch>(timeout, id)
-        })
-      }
-
-      return complete
-    }
-    if (isTimedOut(state.startedAt, environment.options.timeout)) {
-      return timeoutResult<TContext, TPatch>(environment.options.timeout, id)
-    }
-
-    return afterAction(raw, id, strategy, depth, state, traceProps, dataBefore, traceStep, startedAt, environment)
-  } catch (cause) {
-    if (cause instanceof SyncAsyncError) {
       throw cause
     }
-    return actionThrown(cause)
+    let result: Normalized<TContext, TPatch> | Promise<Normalized<TContext, TPatch>>
+
+    traceTiming.nextInvocationId += 1
+    try {
+      result = executeStrategyBody(id, extraProps, depth, state, branchEnvironment)
+    } catch (cause) {
+      return failed(cause)
+    }
+
+    return isPromiseLike(result) ? result.then(complete, failed) : complete(result)
   }
+
+  return executeStrategyBody(id, extraProps, depth, state, environment)
 }

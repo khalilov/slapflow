@@ -1,4 +1,3 @@
-import { map } from 'objwalk'
 import { type Resolve, type ResolveScope } from '~/helpers/path/resolveScope'
 import { childPath } from '~/helpers/path/childPath'
 
@@ -8,4 +7,6 @@ export const resolveNestedObject = <TContext>(
   path: string,
   resolve: Resolve<TContext>
 ): Record<string, unknown> =>
-  map(record, (key, item: unknown) => resolve(item, scope, childPath(path, key)), { shallow: true })
+  Object.fromEntries(
+    Object.keys(record).map((key) => [key, resolve(Reflect.get(record, key), scope, childPath(path, key))])
+  )

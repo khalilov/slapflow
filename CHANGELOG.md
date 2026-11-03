@@ -5,6 +5,40 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0]
+
+### Added
+
+- Inclusive per-invocation strategy timings through the existing trace option:
+  exported `StrategyTiming`, optional `RunResult.timings`, and optional
+  `TraceSink.pushTiming`. Invocation and parent IDs support nested and parallel
+  graph analysis; existing action trace timing is preserved.
+
+### Changed
+
+- Updated the only runtime dependency, objwalk, to `^1.10.0`.
+- `loadConfig` now owns an isolated configuration snapshot. Changes to the source
+  configuration require another `loadConfig` call. Functions retain their identity
+  and closures; action and condition registration remain dynamic.
+- Reduced execution overhead with bounded path/template syntax caches, reusable
+  structural condition validation, less runtime/result allocation, and deferred
+  full runtime construction for built-in condition skips with trace disabled.
+  Live values, condition results and errors are never cached. Standalone condition
+  evaluation continues validating every call.
+- Trace-disabled runs avoid trace-only snapshots, redaction and strategy clocks.
+
+### Fixed
+
+- A throwing timing sink now closes the run and detaches its external abort
+  listener before propagating the original exception. Retained action runtimes
+  cannot write state or execute branches after that failure.
+
+### Documented
+
+- Short profiling and configuration migration examples in both READMEs; detailed
+  timing, snapshot ownership and template cache contracts in both specifications
+  and the Slapflow agent skill.
+
 ## [2.2.0]
 
 ### Added

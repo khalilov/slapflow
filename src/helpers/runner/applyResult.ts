@@ -11,6 +11,10 @@ export const applyResult = <TContext, TPatch>(
   if ('data' in result && result.data) {
     state.data = mergeData(state.data, result.data)
   }
-  state.patches.push(...result.patches)
-  state.events.push(...result.events)
+  if (result.patches !== undefined) {
+    state.patches.push(...result.patches)
+  }
+  if (result.events !== undefined) {
+    state.events.push(...result.events)
+  }
 }

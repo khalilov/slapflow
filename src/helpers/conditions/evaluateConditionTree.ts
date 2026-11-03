@@ -49,9 +49,7 @@ export const evaluateConditionTree = <TContext>(
     }
 
     if (condition) {
-      const args = rawArgs.map((arg, index) =>
-        resolveValue(arg, { ...scope, configPath: `${configPath}[${index + 1}]` })
-      )
+      const args = rawArgs.map((arg, index) => resolveValue(arg, scope, `${configPath}[${index + 1}]`))
 
       return { ok: true, matched: Boolean(condition(scope, ...args)) }
     }

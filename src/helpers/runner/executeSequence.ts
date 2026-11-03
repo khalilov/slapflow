@@ -12,7 +12,7 @@ export const executeSequence = <TContext, TPatch>(
   let index = 0
   const loop = (): Normalized<TContext, TPatch> | Promise<Normalized<TContext, TPatch>> => {
     if (index >= items.length) {
-      return { status: 'success', patches: [], events: [] }
+      return { status: 'success' }
     }
     const result = executeNext(items[index++]!, depth + 1, state, environment)
     const next = (value: Normalized<TContext, TPatch>) => {

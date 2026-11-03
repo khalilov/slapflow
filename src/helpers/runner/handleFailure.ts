@@ -31,5 +31,5 @@ export const handleFailure = <TContext, TPatch>(
   if (strategy.catch?.length) {
     return runCatch(strategy, depth, state, environment)
   }
-  return { status: 'failed', error: stagedError, patches: [], events: [] }
+  return { status: 'failed', error: stagedError }
 }

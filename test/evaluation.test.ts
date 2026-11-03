@@ -32,6 +32,20 @@ const guards = {
 }
 
 describe('standalone evaluation', () => {
+  it('does not invoke custom conditions for an absent expression', () => {
+    let calls = 0
+    const custom = () => {
+      calls += 1
+      return false
+    }
+
+    strict.deepEqual(evaluateCondition(undefined, { context: {} }, { conditions: { custom } }), {
+      ok: true,
+      matched: true,
+    })
+    strict.equal(calls, 0)
+  })
+
   it('evaluates guard expressions without creating a flow or runner', () => {
     const context = {
       visible: true,
@@ -332,6 +346,22 @@ describe('standalone evaluation', () => {
     strict.deepEqual(standaloneExpression, { ok: true, value: 500 })
     if (context.matched) {
       strict.equal(context.result, 500)
+    }
+  })
+})
+
+describe('condition argument diagnostic paths', () => {
+  it.each([
+    { value: { nested: ['$variables.MISSING'] }, path: 'custom.when[1].nested[0]' },
+    { value: { $expression: ['add', '$variables.MISSING', 1] }, path: 'custom.when[1].$expression[1]' },
+    { value: { $template: '${MISSING}' }, path: 'custom.when[1]' },
+  ])('preserves $path', ({ value, path }) => {
+    const result = evaluateCondition(['eq', value, 0], { context: {}, configPath: 'custom.when' })
+
+    strict.equal(result.ok, false)
+    if (result.ok === false) {
+      strict.equal(result.error.code, 'VARIABLE_NOT_FOUND')
+      strict.equal(result.error.path, path)
     }
   })
 })

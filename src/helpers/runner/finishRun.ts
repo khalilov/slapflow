@@ -9,8 +9,15 @@ export const finishRun = <TContext, TPatch>(
   cancellation: RunCancellation,
   traceSink: TraceSink | undefined
 ): RunResult<TContext, TPatch> => {
+  let runResult: RunResult<TContext, TPatch>
+
   state.closed = true
   cancellation.dispose()
 
-  return finishRunResult(result, state, traceSink)
+  runResult = finishRunResult(result, state, traceSink)
+  if (state.traceTiming !== undefined) {
+    runResult.timings = state.traceTiming.entries
+  }
+
+  return runResult
 }

@@ -10,7 +10,7 @@ export const executeRun = <TContext, TPatch>(
   const start = resolveEntrypoint(entrypoint, environment)
 
   if ('error' in start) {
-    return { status: 'failed', error: start.error, patches: [], events: [] }
+    return { status: 'failed', error: start.error }
   }
 
   return executeStrategy(start.id, {}, 0, state, environment)

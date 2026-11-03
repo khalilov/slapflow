@@ -12,7 +12,7 @@ export const executeSelector = <TContext, TPatch>(
   let index = 0
   const loop = (): Normalized<TContext, TPatch> | Promise<Normalized<TContext, TPatch>> => {
     if (index >= items.length) {
-      return { status: 'skipped', reason: 'No selector branch matched', patches: [], events: [] }
+      return { status: 'skipped', reason: 'No selector branch matched' }
     }
     const result = executeNext(items[index++]!, depth + 1, state, environment)
     const next = (value: Normalized<TContext, TPatch>) => {

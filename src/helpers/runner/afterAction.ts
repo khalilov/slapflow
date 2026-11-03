@@ -34,7 +34,9 @@ export const afterAction = <TContext, TPatch>(
     })
   }
 
-  applyResult(result, state, environment.mergeData)
+  if (raw !== undefined && raw !== null && raw !== false) {
+    applyResult(result, state, environment.mergeData)
+  }
 
   pushTrace(
     state,
@@ -57,5 +59,7 @@ export const afterAction = <TContext, TPatch>(
     return result
   }
 
-  return executeThen(strategy, depth, state, environment)
+  return strategy.then !== undefined && strategy.then.length > 0
+    ? executeThen(strategy, depth, state, environment)
+    : result
 }

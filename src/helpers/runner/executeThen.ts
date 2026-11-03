@@ -13,7 +13,7 @@ export const executeThen = <TContext, TPatch>(
   const items = strategy.then ?? []
 
   if (items.length === 0) {
-    return { status: 'success', patches: [], events: [] }
+    return { status: 'success' }
   }
   const mode = strategy.mode ?? 'sequence'
 

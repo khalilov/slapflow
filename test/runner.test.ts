@@ -369,8 +369,11 @@ describe('runner', () => {
 
   it('trace contains strategy props status and duration', async () => {
     const runner = createRunner<Ctx>({ trace: true })
+    let result: Awaited<ReturnType<typeof runner.run>>
+    let snapshots: Awaited<ReturnType<typeof runner.run>>
+
     runner.loadConfig({ strategies: { root: { fn: 'core.noop', props: { x: 1 } } } })
-    const result = await runner.run('root', {})
+    result = await runner.run('root', {})
     assert.deepEqual(
       {
         strategy: result.trace?.[0]?.strategy,
@@ -380,6 +383,14 @@ describe('runner', () => {
       { strategy: 'root', props: { x: 1 }, status: 'success' }
     )
     assert.equal(typeof result.trace?.[0]?.durationMs, 'number')
+    runner.registerAction('write-data', ({ runtime }) => {
+      runtime.data.set('value', 2)
+    })
+    runner.loadConfig({ strategies: { root: { fn: 'write-data' } } })
+    snapshots = await runner.run('root', {})
+
+    assert.deepEqual(snapshots.trace?.[0]?.dataBefore, {})
+    assert.deepEqual(snapshots.trace?.[0]?.dataAfter, { value: 2 })
   })
 
   it('parallel preserves patch order from config', async () => {
@@ -510,5 +521,147 @@ describe('runner', () => {
     })
     const result = await runner.run('root', {})
     assert.deepEqual(result.events, [{ type: 'ui.message', payload: { text: 'ok' } }])
+  })
+})
+
+describe('props before conditions', () => {
+  it('reports missing variables in props even when when is false', () => {
+    const runner = createRunner<{}>()
+    let result: ReturnType<typeof runner.runSync>
+
+    runner.loadConfig({
+      strategies: { root: { fn: 'core.noop', when: false, props: { secret: '$variables.MISSING' } } },
+    })
+    result = runner.runSync('root', {})
+
+    assert.equal(result.status, 'failed')
+    assert.equal(result.error?.code, 'VARIABLE_NOT_FOUND')
+  })
+})
+
+describe('empty strategy props', () => {
+  it('keeps empty props independent and resolves supplied transition props', () => {
+    const runner = createRunner<{}>({ trace: true })
+    const received: Record<string, unknown>[] = []
+    let result: ReturnType<typeof runner.runSync>
+
+    runner.registerAction('capture', ({ props }) => {
+      received.push(props)
+      props.changed = true
+    })
+    runner.loadConfig({
+      strategies: {
+        root: { fn: 'core.noop', then: ['first', 'second', { strategy: 'third', props: { value: '$input.value' } }] },
+        first: { fn: 'capture' },
+        second: { fn: 'capture' },
+        third: { fn: 'capture' },
+      },
+    })
+    result = runner.runSync('root', {}, { value: 7 })
+    assert.equal(result.status, 'success')
+    assert.notEqual(received[0], received[1])
+    assert.deepEqual(received[1], { changed: true })
+    assert.deepEqual(received[2], { value: 7, changed: true })
+    assert.deepEqual(result.trace?.find(({ strategy }) => strategy === 'first')?.props, {})
+    assert.deepEqual(result.trace?.find(({ strategy }) => strategy === 'second')?.props, {})
+    assert.deepEqual(result.trace?.find(({ strategy }) => strategy === 'third')?.props, { value: 7 })
+  })
+})
+
+describe('allocation fast paths', () => {
+  it('preserves custom event iterators even when the array length is zero', () => {
+    const runner = createRunner<Ctx, string>({ trace: true })
+    const event = { type: 'custom', payload: 7 }
+    const events: (typeof event)[] = []
+    let result: ReturnType<typeof runner.runSync>
+
+    events[Symbol.iterator] = () => [event][Symbol.iterator]()
+    runner.registerAction('output', () => ({ events, patch: 'patch', data: { value: 7 }, context: { last: 7 } }))
+    runner.loadConfig({ strategies: { root: { fn: 'output' } } })
+
+    result = runner.runSync('root', {})
+
+    assert.equal(result.status, 'success')
+    assert.deepEqual(result.events, [event])
+    assert.deepEqual(result.patches, ['patch'])
+    assert.deepEqual(result.data, { value: 7 })
+    assert.deepEqual(result.context, { last: 7 })
+    assert.equal(result.trace?.length, 1)
+  })
+
+  it('keeps resolved props independent and preserves transition overrides', () => {
+    const runner = createRunner<Ctx>()
+    const received: unknown[] = []
+
+    runner.registerAction('capture', ({ props }) => {
+      received.push(structuredClone(props))
+      props.value = 'changed'
+      ;(props.nested as { value: string }).value = 'changed'
+    })
+    runner.loadConfig({
+      strategies: {
+        root: { fn: 'core.noop', then: ['leaf', { strategy: 'leaf', props: { value: '$input.value' } }, 'leaf'] },
+        leaf: { fn: 'capture', props: { value: 'original', nested: { value: 'original' } } },
+      },
+    })
+
+    assert.equal(runner.runSync('root', {}, { value: 'override' }).status, 'success')
+    assert.deepEqual(received, [
+      { value: 'original', nested: { value: 'original' } },
+      { value: 'override', nested: { value: 'original' } },
+      { value: 'original', nested: { value: 'original' } },
+    ])
+  })
+
+  it('collects async leaf output once and preserves runtime writes from void actions', async () => {
+    const runner = createRunner<Ctx, string>()
+    let result: Awaited<ReturnType<typeof runner.run>>
+
+    runner.registerAction('void', ({ runtime }) => {
+      runtime.patch('direct')
+      runtime.emit({ type: 'direct' })
+      runtime.data.set('direct', true)
+    })
+    runner.registerAction('output', async () => ({ patch: 'returned', events: [{ type: 'returned' }] }))
+    runner.loadConfig({ strategies: { root: { fn: 'void', then: ['leaf'] }, leaf: { fn: 'output', then: [] } } })
+
+    result = await runner.run('root', {})
+
+    assert.equal(result.status, 'success')
+    assert.deepEqual(result.patches, ['direct', 'returned'])
+    assert.deepEqual(result.events, [{ type: 'direct' }, { type: 'returned' }])
+    assert.deepEqual(result.data, { direct: true })
+  })
+})
+
+describe('empty internal output', () => {
+  it.each([
+    { action: () => undefined, status: 'success' },
+    { action: () => false as const, status: 'skipped' },
+    { action: () => ({ type: 'skip' as const }), status: 'skipped' },
+    { action: () => ({ type: 'stop' as const }), status: 'stopped' },
+    { action: () => ({ type: 'fail' as const }), status: 'failed' },
+    { action: () => ({}), status: 'success' },
+  ])('keeps public arrays fresh for $status', ({ action, status }) => {
+    const runner = createRunner<Ctx, string>({ trace: true })
+    let first: ReturnType<typeof runner.runSync>
+    let second: ReturnType<typeof runner.runSync>
+
+    runner.registerAction('leaf', action)
+    runner.loadConfig({ strategies: { root: { fn: 'leaf' } } })
+
+    first = runner.runSync('root', {})
+    second = runner.runSync('root', {})
+
+    assert.equal(first.status, status)
+    assert.equal(second.status, status)
+    assert.equal(first.patches.length, 0)
+    assert.equal(first.events.length, 0)
+    assert.notEqual(first.patches, second.patches)
+    assert.notEqual(first.events, second.events)
+    first.patches.push('changed')
+    first.events.push({ type: 'changed' })
+    assert.deepEqual(second.patches, [])
+    assert.deepEqual(second.events, [])
   })
 })

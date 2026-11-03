@@ -1,4 +1,13 @@
-import { tools, type Action, type ActionArgs, type Tools, type Runtime } from '~/index'
+import {
+  tools,
+  type Action,
+  type ActionArgs,
+  type Tools,
+  type Runtime,
+  type RunResult,
+  type StrategyTiming,
+  type TraceSink,
+} from '~/index'
 
 const optionalVariables: Omit<Runtime, 'variables'> extends Runtime ? true : false = true
 const requiredTools: Omit<ActionArgs<{}>, 'tools'> extends ActionArgs<{}> ? true : false = false
@@ -50,7 +59,33 @@ const action: Action<{}> = ({ tools }) => {
 }
 const manualCall = (args: Omit<ActionArgs<{}>, 'tools'>) => action({ ...args, tools })
 
+const optionalTimings: Omit<RunResult<{}>, 'timings'> extends RunResult<{}> ? true : false = true
+const oldTraceSink: TraceSink = { push: () => undefined }
+const timingTraceSink: TraceSink = {
+  push: () => undefined,
+  pushTiming: ({ invocationId }) => {
+    const id: number = invocationId
+
+    void id
+  },
+}
+const timing: StrategyTiming = {
+  invocationId: 1,
+  parentInvocationId: null,
+  strategy: 'root',
+  depth: 0,
+  startedAtMs: 0,
+  durationMs: 0,
+  status: 'success',
+}
+const optionalResultTimings: RunResult<{}>['timings'] = undefined
+
 void optionalVariables
 void requiredTools
 void toolkit
 void manualCall
+void optionalTimings
+void oldTraceSink
+void timingTraceSink
+void timing
+void optionalResultTimings

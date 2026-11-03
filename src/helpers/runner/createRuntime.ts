@@ -2,7 +2,7 @@ import { set } from 'objwalk'
 import { type EnqueueOptions, type Input, type Runtime, type RuntimeBranchResult } from '~/types'
 import { type RunState } from '~/helpers/runner/runnerTypes'
 import { EnqueueError } from '~/helpers/errors/EnqueueError'
-import { createEvaluationRuntime } from '~/helpers/path/createEvaluationRuntime'
+import { createEvaluationRuntime, type EvaluationRuntime } from '~/helpers/path/createEvaluationRuntime'
 import { stopResult } from '~/helpers/runner/stopResult'
 
 type RuntimeBranches = {
@@ -15,9 +15,10 @@ export const createRuntime = <TContext, TPatch>(
   branches: RuntimeBranches = {
     executeThen: async () => ({ status: 'success' }),
     executeCatch: async () => undefined,
-  }
+  },
+  evaluationRuntime: EvaluationRuntime = createEvaluationRuntime(state)
 ): Runtime => {
-  const runtime = createEvaluationRuntime(state)
+  const { get, data, variables, resolve } = evaluationRuntime
   const scheduler = state.scheduler
   const currentPool = state.pool
   const enqueue = scheduler
@@ -39,7 +40,10 @@ export const createRuntime = <TContext, TPatch>(
     : undefined
 
   return {
-    ...runtime,
+    get,
+    data,
+    variables,
+    resolve,
     set: (path, value) => {
       if (state.closed === false) {
         set(state.context as Record<string, unknown>, path, value)
@@ -47,7 +51,7 @@ export const createRuntime = <TContext, TPatch>(
     },
     setData: (path, value) => {
       console.warn('runtime.setData() is deprecated; use runtime.data.set() instead')
-      runtime.data.set(path, value)
+      data.set(path, value)
     },
     signal: state.signal,
     executeThen: async (options) =>

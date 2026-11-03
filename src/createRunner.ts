@@ -1,4 +1,5 @@
 import { each } from 'objwalk'
+import { snapshotConfig } from '~/helpers/config/snapshotConfig'
 import {
   type Action,
   type ConditionFn,
@@ -46,6 +47,7 @@ export const createRunner = <TContext, TPatch = unknown>(
 
   const environment: RunnerEnvironment<TContext, TPatch> = {
     registry: { actions: actions.registry, conditions: conditions.registry },
+    validatedConditions: new WeakSet<object>(),
     configRef,
     options: runnerOptions,
     mergeData,
@@ -67,6 +69,7 @@ export const createRunner = <TContext, TPatch = unknown>(
 
   const registerCondition = (name: string, condition: ConditionFn<TContext>): void => {
     conditions.register(name, condition)
+    environment.validatedConditions = new WeakSet<object>()
   }
 
   const registerConditions = (items: Record<string, ConditionFn<TContext>>): void => {
@@ -85,8 +88,12 @@ export const createRunner = <TContext, TPatch = unknown>(
   }
 
   const loadConfig = (nextConfig: Config): ValidationResult => {
-    configRef.current = resolveGuards(nextConfig).config
-    return validateConfig(nextConfig)
+    const snapshot = snapshotConfig(nextConfig)
+
+    configRef.current = resolveGuards(snapshot).config
+    environment.validatedConditions = new WeakSet<object>()
+
+    return validateConfig(snapshot)
   }
 
   const runInternal = (
@@ -114,9 +121,23 @@ export const createRunner = <TContext, TPatch = unknown>(
       reportRunError(result, state, traceSink, options.onError)
       return finishRun(result, state, cancellation, traceSink)
     }
-    const executed = executeRun(entrypoint, state, environment)
+    const failed = (cause: unknown): never => {
+      if (state.traceTiming?.sinkFailure !== undefined) {
+        state.closed = true
+        cancellation.dispose()
+      }
 
-    return isPromiseLike(executed) ? executed.then(done) : done(executed)
+      throw cause
+    }
+    let executed: Normalized<TContext, TPatch> | Promise<Normalized<TContext, TPatch>>
+
+    try {
+      executed = executeRun(entrypoint, state, environment)
+    } catch (cause) {
+      return failed(cause)
+    }
+
+    return isPromiseLike(executed) ? executed.then(done, failed) : done(executed)
   }
 
   const run = async (

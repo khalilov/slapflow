@@ -228,7 +228,7 @@ Results: `ConditionOutcome` is `{ ok: true, matched: boolean, ensure?: true } | 
 
 Custom conditions keep the existing `ConditionFn` runtime contract and receive the original context/input/data objects. Their `runtime.data.set` writes affect the caller's data.
 
-The runner uses these same public helpers. A condition record adds custom conditions to built-ins; a supplied `Map` represents a complete condition registry and is reused without copying. Optional scope `runtime`, `strategy`, and `configPath` support runtime reuse and diagnostic paths.
+The runner shares the evaluation implementation and privately reuses successful structural condition validation for its owned config snapshot. Public helpers validate every call. A condition record adds custom conditions to built-ins; a supplied `Map` represents a complete condition registry and is reused without copying. Optional scope `runtime`, `strategy`, and `configPath` support runtime reuse and diagnostic paths.
 
 ## Creating and running a flow
 
@@ -529,6 +529,20 @@ only).
 Defaults: `maxStepCount: 1000`, `maxDepth: 32`, `timeout: 0`, `trace: false`. Set `-1` to disable a limit (
 emits `LIMIT_DISABLED` warning).
 
+## Loaded configuration and syntax caches
+
+`runner.loadConfig(config)` takes its own snapshot: source mutations become visible
+only after another load. Do not rely on mutating loaded strategies/props/guards.
+The caller's config stays mutable; functions retain identity and closure state.
+Actions and conditions can still be registered dynamically. Successful condition
+registration or config loading invalidates structural validation reuse; condition
+outcomes and type checks always use current values. Exposed type declarations are
+frozen. Standalone evaluators validate each call even for reused expressions.
+
+Path references and templates use private bounded FIFO syntax caches (1024 each),
+shared across runs. They cache no resolved values or scope-dependent errors. No
+public cache configuration or graph compilation API is added.
+
 ## Trace
 
 Enable with `trace: true` in flow options. Each entry records: step/depth, strategy/fn/mode, status, input, props,
@@ -538,6 +552,22 @@ dataBefore/dataAfter, durationMs, reason. Does not store a full context snapshot
 const flow = createFlow({ config, actions, conditions }, { context, bus, trace: true })
 // result.trace contains TraceEntry[]
 ```
+
+`result.timings` is present only when tracing is enabled, including a
+custom sink. Each `StrategyTiming` records invocationId, parentInvocationId,
+strategy, depth, startedAtMs, durationMs and final status. IDs are per run; root
+parent is null. Entries are in completion order, so reconstruct the tree by IDs.
+Duration is inclusive wall time of props, conditions, action, child branches and
+Promise waits. Preserve the existing measurement boundaries of `TraceEntry.durationMs`; do not replace it with the new inclusive metric.
+Never sum nested durations or subtract parallel children to claim self/CPU time.
+
+Old sinks with only `push` still work. Optional `pushTiming` receives committed
+spans once; its exception propagates outside action error handling, without
+retrying the action or duplicating spans. Original invocation errors take priority
+if finalization also throws. The run is closed and its external abort listener is detached on timing delivery failure; retained runtime writes and branch calls stay blocked. The existing `push` error policy is unchanged.
+Trace off avoids timing state and trace-only copies. Full runtime deferral for
+builtin skips applies only without trace; custom conditions retain the full runtime.
+For aggregation and caveats, read SPEC's “Strategy timing with trace” section.
 
 ## Key rules
 

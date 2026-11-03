@@ -417,6 +417,7 @@ export type RunResult<TContext, TPatch = unknown> = {
   events: SlapEvent[]
   error?: SlapError
   trace?: TraceEntry[]
+  timings?: StrategyTiming[]
   steps: number
 }
 
@@ -475,8 +476,19 @@ export type RunOptions = {
   binding?: string
 }
 
+export type StrategyTiming = {
+  invocationId: number
+  parentInvocationId: number | null
+  strategy: string
+  depth: number
+  startedAtMs: number
+  durationMs: number
+  status: 'success' | 'skipped' | 'stopped' | 'failed'
+}
+
 export type TraceSink = {
   push(entry: TraceEntry): void
+  pushTiming?(entry: StrategyTiming): void
   entries?(): TraceEntry[]
 }
 

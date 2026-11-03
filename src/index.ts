@@ -77,6 +77,7 @@ export {
   type RunnerOptions,
   type Runtime,
   type Strategy,
+  type StrategyTiming,
   type StartResult,
   type TraceEntry,
   type TraceSink,
