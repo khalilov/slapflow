@@ -111,7 +111,7 @@ console.table((await flow.runner.run('order.submit', context, { orderId: 'order-
 `timings` includes conditions, props, the action and its child branches.
 Use `invocationId` / `parentInvocationId` to reconstruct the tree. Durations are
 inclusive wall time; nested durations must not be summed. The existing
-`trace[].durationMs` keeps its previous measurement boundaries. With trace off, the timing
+`trace[].duration` keeps its previous measurement boundaries. With trace off, the timing
 array is absent. Existing custom sinks with only `push` remain supported.
 
 `runner.loadConfig(config)` now owns a configuration snapshot. After changing the
@@ -267,7 +267,7 @@ const flow = createFlow<Context, Patch, Events>(
 )
 ```
 
-`overflow: 'wait'` applies backpressure instead of dropping accepted work. A task cannot enqueue into its own pool (`ENQUEUE_SELF_POOL`), so the fan-out dispatcher runs outside `colony`. `flow.poolStats('colony')` reports `active`/`queued`/`oldestQueuedMs`, and `flow.drain({ timeoutMs })` waits for pools and binding lanes to empty on shutdown.
+`overflow: 'wait'` applies backpressure instead of dropping accepted work. A task cannot enqueue into its own pool (`ENQUEUE_SELF_POOL`), so the fan-out dispatcher runs outside `colony`. `flow.poolStats('colony')` reports `active`/`queued`/`oldestQueued`, and `flow.drain({ timeout })` waits for pools and binding lanes to empty on shutdown.
 
 The pool is in-process and in-memory: it bounds concurrency and preserves per-key order, but it is not durable storage.
 

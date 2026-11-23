@@ -7,7 +7,7 @@ export const finishStrategyTiming = (
   traceTiming: TraceTimingState,
   traceSink: TraceSink | undefined
 ): void => {
-  entry.durationMs = performance.now() - startedAt
+  entry.duration = performance.now() - startedAt
   traceTiming.entries.push(entry)
   try {
     traceSink?.pushTiming?.(entry)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { createFlow, createPubSub, type Bus, type BusBinding, type EventMap } from '~/index'
+import { createFlow, createPubSub, type Bus, type BusBinding, type EventMap, type RunTraceEvent } from '~/index'
 
 type Context = {
   requestId: string
@@ -79,6 +79,69 @@ describe('flow', () => {
     assert.deepEqual(started.inactive, [])
     assert.equal(started.validation.ok, true)
     assert.deepEqual(received, [{ context: { requestId: 'request-1' }, input: { email: 'ada@example.com' } }])
+  })
+
+  it('reports a bus-triggered run with its source and emitted event names', async () => {
+    const bus = createPubSub<{ message: { id: string } }>()
+    const trace: RunTraceEvent[] = []
+    const flow = createFlow(
+      {
+        strategies: { read: { fn: 'core.emit', props: { type: 'message.read' } } },
+        events: { '[bus] message': { entrypoint: 'read' } },
+      },
+      { bus, context: {}, trace: { level: 'summary', callback: (event) => trace.push(event) } }
+    )
+
+    assert.equal(flow.start().validation.ok, true)
+    bus.emit('message', { id: 'one' })
+    assert.equal((await flow.drain()).drained, true)
+
+    const [start, end] = trace
+    assert.ok(start?.type === 'run-start' && end?.type === 'run-end')
+    assert.equal(start.runId, end.runId)
+    assert.equal(start.entrypoint, 'read')
+    assert.equal(start.binding, '[bus] message')
+    assert.equal(end.status, 'success')
+    assert.ok(end.duration >= 0)
+    assert.deepEqual(end.events, ['message.read'])
+    assert.equal(end.tree, undefined)
+  })
+
+  it('reports the timing tree for a direct run even if the start callback throws', () => {
+    const trace: RunTraceEvent[] = []
+    const flow = createFlow(
+      {
+        strategies: {
+          root: { fn: 'core.parallel', mode: 'parallel', then: ['left', 'right'] },
+          left: { fn: 'core.noop' },
+          right: { fn: 'core.noop' },
+        },
+      },
+      {
+        context: {},
+        trace: {
+          level: 'tree',
+          callback: (event) => {
+            trace.push(event)
+            if (event.type === 'run-start') {
+              throw new Error('observer failed')
+            }
+          },
+        },
+      }
+    )
+
+    assert.equal(flow.start().validation.ok, true)
+    assert.equal(flow.runner.runSync('root', {}).status, 'success')
+
+    const end = trace[1]
+    assert.ok(end?.type === 'run-end')
+    assert.equal(end.binding, undefined)
+    assert.equal(end.tree?.[0]?.strategy, 'root')
+    assert.deepEqual(
+      end.tree?.[0]?.children.map(({ strategy }) => strategy),
+      ['left', 'right']
+    )
   })
 
   it('passes the original bus envelope to queued runs when requested', async () => {

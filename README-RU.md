@@ -110,7 +110,7 @@ console.table((await flow.runner.run('order.submit', context, { orderId: 'order-
 
 `timings` включает условия, props, action и дочерние ветки. Дерево
 восстанавливается по `invocationId` / `parentInvocationId`. Это inclusive wall-time:
-вложенные длительности нельзя складывать. Прежний `trace[].durationMs` сохраняет
+вложенные длительности нельзя складывать. Прежний `trace[].duration` сохраняет
 прежние границы измерения. Без trace массив таймингов отсутствует. Пользовательские
 sinks только с `push` продолжают работать.
 
@@ -301,7 +301,7 @@ const flow = createFlow<Context, Patch, Events>(
 )
 ```
 
-`overflow: 'wait'` применяет backpressure вместо потери принятой работы. Задача не может ставить работу в собственный пул (`ENQUEUE_SELF_POOL`), поэтому диспетчер фан-аута работает вне `colony`. `flow.poolStats('colony')` отдаёт `active`/`queued`/`oldestQueuedMs`, а `flow.drain({ timeoutMs })` ждёт опустошения пулов и линий привязок при остановке.
+`overflow: 'wait'` применяет backpressure вместо потери принятой работы. Задача не может ставить работу в собственный пул (`ENQUEUE_SELF_POOL`), поэтому диспетчер фан-аута работает вне `colony`. `flow.poolStats('colony')` отдаёт `active`/`queued`/`oldestQueued`, а `flow.drain({ timeout })` ждёт опустошения пулов и линий привязок при остановке.
 
 Пул живёт внутри процесса и в памяти: он ограничивает конкурентность и сохраняет порядок внутри ключа, но не является дисковым хранилищем.
 

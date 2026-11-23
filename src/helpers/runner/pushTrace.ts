@@ -25,7 +25,7 @@ export const pushTrace = <TContext, TPatch>(
     props,
     dataBefore,
     dataAfter: cloneData(state.data),
-    durationMs: Date.now() - startedAt,
+    duration: Date.now() - startedAt,
     ...(reason ? { reason } : {}),
   })
 }

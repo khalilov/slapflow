@@ -21,8 +21,8 @@ export const executeStrategy = <TContext, TPatch>(
       parentInvocationId: environment.parentInvocationId ?? null,
       strategy: id,
       depth,
-      startedAtMs: startedAt - traceTiming.startedAt,
-      durationMs: 0,
+      startedAt: startedAt - traceTiming.startedAt,
+      duration: 0,
       status: 'failed',
     }
     const branchEnvironment = { ...environment, parentInvocationId: nextInvocationId }

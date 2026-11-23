@@ -74,8 +74,8 @@ const timing: StrategyTiming = {
   parentInvocationId: null,
   strategy: 'root',
   depth: 0,
-  startedAtMs: 0,
-  durationMs: 0,
+  startedAt: 0,
+  duration: 0,
   status: 'success',
 }
 const optionalResultTimings: RunResult<{}>['timings'] = undefined

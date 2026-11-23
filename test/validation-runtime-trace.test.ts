@@ -377,7 +377,7 @@ describe('trace and safety limits', () => {
       props: {},
       dataBefore: {},
       dataAfter: {},
-      durationMs: 0,
+      duration: 0,
     })
 
     assert.equal(sink.entries?.().length, 1)
@@ -407,23 +407,6 @@ describe('trace and safety limits', () => {
     const timeoutResult = await timeoutRunner.run('root', {})
 
     assert.equal(timeoutResult.error?.code, 'TIMEOUT')
-  })
-
-  it('keeps timeoutMs as a deprecated fallback', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const runner = createRunner<Ctx>({ timeoutMs: 1 })
-    runner.registerAction('slow', async () => {
-      await new Promise((resolve) => setTimeout(resolve, 5))
-    })
-    runner.loadConfig({ strategies: { root: { fn: 'slow' } } })
-
-    const result = await runner.run('root', {})
-
-    assert.equal(result.error?.code, 'TIMEOUT')
-    expect(warn).toHaveBeenCalledWith(
-      'timeoutMs is deprecated; use timeout. It will be removed in a future major release.'
-    )
-    warn.mockRestore()
   })
 
   it('aborts timed-out actions and ignores their late runtime mutations', async () => {
@@ -507,12 +490,12 @@ describe('strategy timings', () => {
     assert.equal(root.depth, 0)
     assert.equal(new Set(spans.map(({ invocationId }) => invocationId)).size, 3)
     for (const span of spans) {
-      assert.ok(Number.isFinite(span.durationMs) && span.durationMs >= 0)
-      assert.ok(Number.isFinite(span.startedAtMs) && span.startedAtMs >= 0)
+      assert.ok(Number.isFinite(span.duration) && span.duration >= 0)
+      assert.ok(Number.isFinite(span.startedAt) && span.startedAt >= 0)
       assert.equal(span.status, 'success')
       assert.deepEqual(
         Object.keys(span).sort(),
-        ['invocationId', 'parentInvocationId', 'strategy', 'depth', 'startedAtMs', 'durationMs', 'status'].sort()
+        ['invocationId', 'parentInvocationId', 'strategy', 'depth', 'startedAt', 'duration', 'status'].sort()
       )
       if (span.strategy !== 'root') {
         assert.equal(span.parentInvocationId, root.invocationId)
@@ -561,7 +544,7 @@ describe('strategy timings', () => {
       ['child', 'root']
     )
     assert.deepEqual(result.timings, spans)
-    assert.ok(spans[1]!.durationMs >= spans[0]!.durationMs)
+    assert.ok(spans[1]!.duration >= spans[0]!.duration)
     assert.equal(spans[0]!.parentInvocationId, spans[1]!.invocationId)
   })
 

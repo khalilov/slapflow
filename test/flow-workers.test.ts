@@ -184,7 +184,7 @@ describe('flow workers pool', () => {
     assert.deepEqual(flow.poolStats()['[bus] job']?.perKey[''], {
       active: 1,
       queued: 0,
-      oldestQueuedMs: 0,
+      oldestQueued: 0,
     })
 
     settle('a1')
@@ -485,7 +485,7 @@ describe('flow named pools', () => {
       bus.emit('dispatch', { id: '1' })
       await vi.advanceTimersByTimeAsync(0)
 
-      const pending = flow.drain({ timeoutMs: 100 })
+      const pending = flow.drain({ timeout: 100 })
 
       await vi.advanceTimersByTimeAsync(100)
       assert.deepEqual(await pending, { drained: false, remaining: 1 })
@@ -592,7 +592,7 @@ describe('flow named pools', () => {
       {
         bus,
         context: () => ({}),
-        pools: { p: { workers: 1, events: 'sampled', eventsMinIntervalMs: 1_000_000 } },
+        pools: { p: { workers: 1, events: 'sampled', eventsMinInterval: 1_000_000 } },
       }
     )
 

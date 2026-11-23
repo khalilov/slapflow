@@ -204,7 +204,7 @@ export const createPoolRegistry = (options: PoolRegistryOptions): PoolRegistry =
         perKey[line.key] = {
           active: line.active ? 1 : 0,
           queued: line.queue.length,
-          oldestQueuedMs: oldest === undefined ? 0 : Math.max(now - oldest, 0),
+          oldestQueued: oldest === undefined ? 0 : Math.max(now - oldest, 0),
         }
       }
       const oldest = findOldestQueuedTask(pool)?.task.enqueuedAt ?? 0
@@ -214,7 +214,7 @@ export const createPoolRegistry = (options: PoolRegistryOptions): PoolRegistry =
         workers: pool.workers,
         active: pool.active,
         queued: pool.queued,
-        oldestQueuedMs: oldest === 0 ? 0 : Math.max(now - oldest, 0),
+        oldestQueued: oldest === 0 ? 0 : Math.max(now - oldest, 0),
         perKey,
       }
     }

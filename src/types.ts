@@ -228,7 +228,7 @@ export type ConcurrencyOptions<TPayload = Input> = {
   maxQueueSize?: number
   overflow?: QueueOverflow
   events?: PoolEventMode
-  eventsMinIntervalMs?: number
+  eventsMinInterval?: number
   coalesce?: ConcurrencyKey<TPayload> | null
 }
 
@@ -237,7 +237,7 @@ export type PoolOptions = {
   maxQueueSize?: number
   overflow?: QueueOverflow
   events?: PoolEventMode
-  eventsMinIntervalMs?: number
+  eventsMinInterval?: number
 }
 
 export type PoolStats = {
@@ -245,8 +245,8 @@ export type PoolStats = {
   workers: number
   active: number
   queued: number
-  oldestQueuedMs: number
-  perKey: Record<string, { active: number; queued: number; oldestQueuedMs: number }>
+  oldestQueued: number
+  perKey: Record<string, { active: number; queued: number; oldestQueued: number }>
 }
 
 export type EnqueueOptions = {
@@ -296,7 +296,7 @@ export type PoolDefinition = {
   maxQueueSize: number
   overflow: QueueOverflow
   events: PoolEventMode
-  eventsMinIntervalMs: number
+  eventsMinInterval: number
 }
 
 export type PoolLine = {
@@ -410,7 +410,7 @@ export type Flow<TContext, TPatch = unknown> = {
   stop(options?: { force?: boolean }): void
   poolStats(): Record<string, PoolStats>
   poolStats(pool: string): PoolStats
-  drain(options?: { timeoutMs?: number }): Promise<DrainResult>
+  drain(options?: { timeout?: number }): Promise<DrainResult>
 }
 
 export type RunResult<TContext, TPatch = unknown> = {
@@ -463,9 +463,7 @@ export type RunnerOptions<TContext, TPatch> = {
   maxSteps?: number
   maxDepth?: number
   timeout?: number
-  /** @deprecated Use `timeout`. It will be removed in a future major release. */
-  timeoutMs?: number
-  trace?: boolean | TraceSink
+  trace?: boolean | TraceSink | TraceOptions
   onError?: ErrorReporter<TContext, TPatch>
   mergeData?: (current: Record<string, unknown>, next: Record<string, unknown>) => Record<string, unknown>
   variables?: Variables
@@ -485,10 +483,36 @@ export type StrategyTiming = {
   parentInvocationId: number | null
   strategy: string
   depth: number
-  startedAtMs: number
-  durationMs: number
+  startedAt: number
+  duration: number
   status: 'success' | 'skipped' | 'stopped' | 'failed'
 }
+
+export type TraceOptions = {
+  level: 'summary' | 'tree'
+  callback?: (event: RunTraceEvent) => void
+}
+
+export type StrategyTimingNode = StrategyTiming & { children: StrategyTimingNode[] }
+
+type RunTraceSource = {
+  runId: string
+  entrypoint: string
+  binding?: string
+  pool?: string
+}
+
+export type RunTraceEvent = RunTraceSource &
+  (
+    | { type: 'run-start' }
+    | {
+        type: 'run-end'
+        status: RunResult<unknown>['status']
+        duration: number
+        events: string[]
+        tree?: StrategyTimingNode[]
+      }
+  )
 
 export type TraceSink = {
   push(entry: TraceEntry): void
@@ -507,7 +531,7 @@ export type TraceEntry = {
   props: Props
   dataBefore: Record<string, unknown>
   dataAfter: Record<string, unknown>
-  durationMs: number
+  duration: number
   reason?: string
 }
 

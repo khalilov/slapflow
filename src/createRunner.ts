@@ -16,6 +16,7 @@ import { SyncAsyncError } from '~/helpers/errors/syncAsyncError'
 import { BUILTIN_ACTIONS } from '~/helpers/actions'
 import { BUILTIN_CONDITIONS } from '~/helpers/conditions'
 import { createMemoryTraceSink } from '~/helpers/trace/createMemoryTraceSink'
+import { startRunTrace } from '~/helpers/trace/startRunTrace'
 import { slapError } from '~/helpers/errors/slapError'
 import { isPromiseLike } from '~/helpers/runner/isPromiseLike'
 import { runnerLimitWarnings } from '~/helpers/validation/runnerLimitWarnings'
@@ -28,14 +29,12 @@ import { createRunState } from '~/helpers/runner/createRunState'
 import { createReservedRegistry } from '~/helpers/registry/createReservedRegistry'
 import { executeRun } from '~/helpers/runner/executeRun'
 import { finishRun } from '~/helpers/runner/finishRun'
-import { normalizeRunnerOptions } from '~/helpers/runner/normalizeRunnerOptions'
 import { reportRunError } from '~/helpers/runner/reportRunError'
 
 export const createRunner = <TContext, TPatch = unknown>(
   options: RunnerOptions<TContext, TPatch> = {},
   schedulerRef?: { current?: PoolScheduler }
 ): Runner<TContext, TPatch> => {
-  const runnerOptions = normalizeRunnerOptions(options)
   const actions = createReservedRegistry(BUILTIN_ACTIONS as readonly [string, Action<TContext, TPatch>][], 'action')
   const conditions = createReservedRegistry(
     BUILTIN_CONDITIONS as readonly [string, ConditionFn<TContext>][],
@@ -49,7 +48,7 @@ export const createRunner = <TContext, TPatch = unknown>(
     registry: { actions: actions.registry, conditions: conditions.registry },
     validatedConditions: new WeakSet<object>(),
     configRef,
-    options: runnerOptions,
+    options,
     mergeData,
   }
 
@@ -84,7 +83,7 @@ export const createRunner = <TContext, TPatch = unknown>(
 
   const validateConfig = (target = configRef.current): ValidationResult => {
     const result = validateRawConfig(target, actions.registry, conditions.registry)
-    return { ...result, warnings: [...result.warnings, ...runnerLimitWarnings(runnerOptions)] }
+    return { ...result, warnings: [...result.warnings, ...runnerLimitWarnings(options)] }
   }
 
   const loadConfig: Runner<TContext, TPatch>['loadConfig'] = (definition) => {
@@ -114,7 +113,15 @@ export const createRunner = <TContext, TPatch = unknown>(
     sync: boolean,
     runOptions: RunOptions
   ): RunResult<TContext, TPatch> | Promise<RunResult<TContext, TPatch>> => {
-    const traceSink = options.trace === true ? createMemoryTraceSink() : options.trace || undefined
+    const { trace } = options
+    const traceOptions = typeof trace === 'object' && 'level' in trace ? trace : undefined
+    const traceSink =
+      trace === true || traceOptions?.level === 'tree'
+        ? createMemoryTraceSink()
+        : typeof trace === 'object' && 'push' in trace
+          ? trace
+          : undefined
+    const finishTrace = traceOptions === undefined ? undefined : startRunTrace(traceOptions, entrypoint, runOptions)
     const cancellation = createRunCancellation(runOptions.signal)
     const state: RunState<TContext, TPatch> = createRunState<TContext, TPatch>({
       context,
@@ -130,7 +137,10 @@ export const createRunner = <TContext, TPatch = unknown>(
     })
     const done = (result: Normalized<TContext, TPatch>): RunResult<TContext, TPatch> => {
       reportRunError(result, state, traceSink, options.onError)
-      return finishRun(result, state, cancellation, traceSink)
+      const runResult = finishRun(result, state, cancellation, traceSink)
+
+      finishTrace?.(runResult)
+      return runResult
     }
     const failed = (cause: unknown): never => {
       if (state.traceTiming?.sinkFailure !== undefined) {
@@ -138,6 +148,7 @@ export const createRunner = <TContext, TPatch = unknown>(
         cancellation.dispose()
       }
 
+      finishTrace?.({ status: 'failed', events: state.events, timings: state.traceTiming?.entries ?? [] })
       throw cause
     }
     let executed: Normalized<TContext, TPatch> | Promise<Normalized<TContext, TPatch>>

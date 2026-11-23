@@ -119,7 +119,7 @@ export const createFlow = <TContext, TPatch = unknown, TEvents extends object = 
     const emitKey = `${pool}\u0000${event}`
     const last = lastEmitByPool.get(emitKey) ?? -Infinity
 
-    if (now - last < poolDefinition.eventsMinIntervalMs) {
+    if (now - last < poolDefinition.eventsMinInterval) {
       return false
     }
 
@@ -205,7 +205,7 @@ export const createFlow = <TContext, TPatch = unknown, TEvents extends object = 
         pool: task.pool,
         entrypoint: task.entrypoint,
         key: task.key,
-        waitMs: Math.max(startedAt - task.enqueuedAt, 0),
+        wait: Math.max(startedAt - task.enqueuedAt, 0),
       })
     }
 
@@ -249,7 +249,7 @@ export const createFlow = <TContext, TPatch = unknown, TEvents extends object = 
             pool: task.pool,
             entrypoint: task.entrypoint,
             key: task.key,
-            durationMs: Math.max(Date.now() - startedAt, 0),
+            duration: Math.max(Date.now() - startedAt, 0),
             status,
           })
         }
@@ -345,7 +345,7 @@ export const createFlow = <TContext, TPatch = unknown, TEvents extends object = 
       maxQueueSize: concurrency.maxQueueSize ?? Infinity,
       overflow: concurrency.overflow ?? 'wait',
       events: concurrency.events ?? 'off',
-      eventsMinIntervalMs: concurrency.eventsMinIntervalMs ?? 0,
+      eventsMinInterval: concurrency.eventsMinInterval ?? 0,
     })
     return registry.definition(name) as PoolDefinition
   }
@@ -557,7 +557,7 @@ export const createFlow = <TContext, TPatch = unknown, TEvents extends object = 
     const errors: ValidationIssue[] = []
     const warnings: ValidationIssue[] = []
     const declared = options.pools ?? {}
-    const poolScopedFields = ['maxQueueSize', 'overflow', 'events', 'eventsMinIntervalMs'] as const
+    const poolScopedFields = ['maxQueueSize', 'overflow', 'events', 'eventsMinInterval'] as const
 
     each(
       declared,
@@ -745,7 +745,7 @@ export const createFlow = <TContext, TPatch = unknown, TEvents extends object = 
     return single
   }
 
-  const drain = (drainOptions: { timeoutMs?: number } = {}): Promise<DrainResult> => {
+  const drain = (drainOptions: { timeout?: number } = {}): Promise<DrainResult> => {
     if (drainPromise) {
       return drainPromise
     }
@@ -756,15 +756,15 @@ export const createFlow = <TContext, TPatch = unknown, TEvents extends object = 
 
     drainPromise = new Promise<DrainResult>((resolve) => {
       drainResolve = resolve
-      const timeoutMs = drainOptions.timeoutMs
+      const timeout = drainOptions.timeout
 
-      if (timeoutMs !== undefined) {
+      if (timeout !== undefined) {
         setTimeout(() => {
           if (drainResolve) {
             registry.rejectWaiters('ENQUEUE_DRAINING')
             finishDrain({ drained: false, remaining: remaining() })
           }
-        }, timeoutMs)
+        }, timeout)
       }
       checkDrain()
     })

@@ -382,7 +382,7 @@ describe('runner', () => {
       },
       { strategy: 'root', props: { x: 1 }, status: 'success' }
     )
-    assert.equal(typeof result.trace?.[0]?.durationMs, 'number')
+    assert.equal(typeof result.trace?.[0]?.duration, 'number')
     runner.registerAction('write-data', ({ runtime }) => {
       runtime.data.set('value', 2)
     })

@@ -621,7 +621,7 @@ Guards существуют, чтобы критерий истинности ж
 - входные данные (`input`);
 - свойства (`props`);
 - данные до и после (`dataBefore`/`dataAfter`);
-- длительность (`durationMs`);
+- длительность (`duration`);
 - причину (`reason`).
 
 Трассировка не хранит полный снимок контекста.
@@ -755,7 +755,7 @@ type ConcurrencyOptions<TPayload> = {
   maxQueueSize?: number
   overflow?: 'drop-oldest' | 'drop-newest' | 'wait'
   events?: 'off' | 'sampled' | 'all'
-  eventsMinIntervalMs?: number
+  eventsMinInterval?: number
   coalesce?: ConcurrencyKey<TPayload> | null
 }
 
@@ -764,7 +764,7 @@ type PoolOptions = {
   maxQueueSize?: number
   overflow?: 'drop-oldest' | 'drop-newest' | 'wait'
   events?: 'off' | 'sampled' | 'all'
-  eventsMinIntervalMs?: number
+  eventsMinInterval?: number
 }
 ```
 
@@ -779,10 +779,10 @@ type PoolOptions = {
 ```ts
 poolStats(): Record<string, PoolStats>
 poolStats(pool: string): PoolStats
-drain(options?: { timeoutMs?: number }): Promise<{ drained: boolean; remaining: number }>
+drain(options?: { timeout?: number }): Promise<{ drained: boolean; remaining: number }>
 ```
 
-`poolStats` возвращает `active`, `queued`, `oldestQueuedMs` и разбивку по ключам; простаивающие линии вытесняются. `drain` прекращает приём новых запусков, ждёт опустошения пулов и линий привязок и резолвится `{ drained: true, remaining: 0 }` — либо `{ drained: false, remaining }` по таймауту. Идемпотентен. Сам `drain` только отвязывает привязки и не блокирует `runtime.enqueue` (работающие продюсеры продолжают ставить задачи), поэтому `ENQUEUE_DRAINING` поднимается `stop()`/сбросом, а не `drain`.
+`poolStats` возвращает `active`, `queued`, `oldestQueued` и разбивку по ключам; простаивающие линии вытесняются. `drain` прекращает приём новых запусков, ждёт опустошения пулов и линий привязок и резолвится `{ drained: true, remaining: 0 }` — либо `{ drained: false, remaining }` по таймауту. Идемпотентен. Сам `drain` только отвязывает привязки и не блокирует `runtime.enqueue` (работающие продюсеры продолжают ставить задачи), поэтому `ENQUEUE_DRAINING` поднимается `stop()`/сбросом, а не `drain`.
 
 `ActionArgs` и `Runtime` содержат `signal: AbortSignal`. Режим `latest` прерывает предыдущий запуск в той же линии. `flow.stop({ force: true })` прерывает все активные запуски; обычный `stop()` удаляет привязки, но не отменяет выполняющиеся действия. Прерывание является кооперативным: действие использует сигнал для запросов, таймеров и собственной асинхронной работы.
 
@@ -858,7 +858,13 @@ bus.on('error', ({ parsed }) => {}) // { error }
 
 ## Тайминги стратегий через trace
 
-Два режима управляются существующей опцией `trace`. При выключенном trace (по умолчанию) runner не создаёт состояние замеров, span-объекты и массив таймингов, не вызывает `performance.now()` для spans стратегий и не добавляет `RunResult.timings`. При `trace: true` или пользовательском `TraceSink` каждый вызов стратегии получает запись тайминга. `runSync` остаётся синхронным.
+Для вывода запусков используйте `trace: { level: 'summary' | 'tree', callback? }`.
+По умолчанию callback выводит записи через `console.debug`. События
+`run-start` и `run-end` содержат одинаковые `runId` и `entrypoint`. Для запуска
+через событие передаётся `binding`, для запуска в пуле — `pool`. Итог содержит
+статус, длительность в `duration` и имена отправленных событий. Уровень
+`tree` также передаёт дерево таймингов стратегий. Ошибка callback не меняет
+результат запуска. `trace: true` по-прежнему собирает трассировку в результат.
 
 ```ts
 type StrategyTiming = {
@@ -866,15 +872,15 @@ type StrategyTiming = {
   parentInvocationId: number | null
   strategy: string
   depth: number
-  startedAtMs: number
-  durationMs: number
+  startedAt: number
+  duration: number
   status: 'success' | 'skipped' | 'stopped' | 'failed'
 }
 ```
 
 `StrategyTiming` экспортируется из корня пакета. `RunResult.timings?: StrategyTiming[]` содержит завершённые вызовы в порядке завершения. ID уникальны в пределах run, у корня `parentInvocationId: null`. Дерево восстанавливается по ID, не по позициям в массиве. ID родителя хранится в environment ветки, поэтому parallel-дети получают общего действительного родителя. Вызов, восстановленный через `catch`, записывает итоговый статус результата. Переход, отклонённый до входа в стратегию, записи не получает.
 
-`startedAtMs` — смещение от инициализации замеров run, измеряемое через `performance.now()`. `durationMs` — полное wall-время вызова: props, условия, action, `then`/`catch` и ожидание Promise. При timeout span завершается вместе с вызовом runner, не ожидая завершения исходного action. Существующие `TraceEntry.durationMs`, порядок записей, снимки данных и редактирование секретов сохраняют прежнюю семантику.
+`startedAt` — смещение от инициализации замеров run, измеряемое через `performance.now()`. `duration` — полное wall-время вызова: props, условия, action, `then`/`catch` и ожидание Promise. При timeout span завершается вместе с вызовом runner, не ожидая завершения исходного action. Существующие `TraceEntry.duration`, порядок записей, снимки данных и редактирование секретов сохраняют прежнюю семантику.
 
 `TraceSink` поддерживает optional `pushTiming(entry: StrategyTiming): void`; старые sinks только с `push` продолжают работать, тайминги остаются доступны в результате run. Запись фиксируется ровно один раз перед передачей в `pushTiming`. Если `pushTiming` бросает исключение, исходное исключение пробрасывается вызывающему коду отдельно от обработки ошибок action, без изменения результата завершённого action, повторного запуска action и повторного span. Предки завершают собственные spans. Если финализация уже брошенного/отклонённого вызова тоже бросает исключение, сохраняется исходная ошибка вызова. При исключении из `pushTiming` run закрывается и снимает подписку на внешний AbortSignal. Сохранённый runtime после этого не может записывать состояние или исполнять ветки. Политика существующего `push` не меняется.
 
@@ -883,13 +889,13 @@ Trace добавляет расходы времени и памяти и мож
 ```ts
 const totals = new Map<string, { count: number; total: number; mean: number; max: number; skipped: number }>()
 
-for (const { strategy, durationMs, status } of result.timings ?? []) {
+for (const { strategy, duration, status } of result.timings ?? []) {
   const row = totals.get(strategy) ?? { count: 0, total: 0, mean: 0, max: 0, skipped: 0 }
 
   row.count += 1
-  row.total += durationMs
+  row.total += duration
   row.mean = row.total / row.count
-  row.max = Math.max(row.max, durationMs)
+  row.max = Math.max(row.max, duration)
   row.skipped += Number(status === 'skipped')
   totals.set(strategy, row)
 }

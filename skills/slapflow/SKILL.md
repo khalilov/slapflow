@@ -308,7 +308,7 @@ the same token in the same line.
 Inside an action, `runtime.enqueue(entrypoint, input, { pool, key?, coalesceToken? })` fans work into a named pool; it
 resolves on acceptance. A task cannot enqueue into its own pool (`ENQUEUE_SELF_POOL`) — producers must run outside the
 pool they feed. Failures throw `EnqueueError` (exported), mapped by the runner to a
-controlled `fail`. `flow.poolStats('colony')` reports `active`/`queued`/`oldestQueuedMs`; `flow.drain({ timeoutMs })`
+controlled `fail`. `flow.poolStats('colony')` reports `active`/`queued`/`oldestQueued`; `flow.drain({ timeout })`
 waits for pools and binding lanes to empty.
 
 `flow.stop({ force: true })` aborts **every** active run. Normal `stop()` removes bindings but does not cancel running
@@ -349,8 +349,8 @@ Published through the configured bus:
 | `slapflow.run.dropped`    | dropped by `latest`/`drop`, queue overflow, or reset |
 | `slapflow.queue.overflow` | queue full                                           |
 | `slapflow.task.queued`    | pool task accepted                                   |
-| `slapflow.task.started`   | pool task dispatched (`waitMs`)                      |
-| `slapflow.task.finished`  | pool task done (`durationMs`, `status`)              |
+| `slapflow.task.started`   | pool task dispatched (`wait`)                      |
+| `slapflow.task.finished`  | pool task done (`duration`, `status`)              |
 
 For pooled runs, `pools[pool].events` gates `task.*` and `run.started`/`run.finished` (`'off'` by
 default). `run.failed`/`run.cancelled` and `queue.overflow` are always published.
@@ -546,7 +546,7 @@ public cache configuration or graph compilation API is added.
 ## Trace
 
 Enable with `trace: true` in flow options. Each entry records: step/depth, strategy/fn/mode, status, input, props,
-dataBefore/dataAfter, durationMs, reason. Does not store a full context snapshot.
+dataBefore/dataAfter, duration, reason. Does not store a full context snapshot.
 
 ```ts
 const flow = createFlow({ ...config, actions, conditions }, { context, bus, trace: true })
@@ -555,10 +555,10 @@ const flow = createFlow({ ...config, actions, conditions }, { context, bus, trac
 
 `result.timings` is present only when tracing is enabled, including a
 custom sink. Each `StrategyTiming` records invocationId, parentInvocationId,
-strategy, depth, startedAtMs, durationMs and final status. IDs are per run; root
+strategy, depth, startedAt, duration and final status. IDs are per run; root
 parent is null. Entries are in completion order, so reconstruct the tree by IDs.
 Duration is inclusive wall time of props, conditions, action, child branches and
-Promise waits. Preserve the existing measurement boundaries of `TraceEntry.durationMs`; do not replace it with the new inclusive metric.
+Promise waits. Preserve the existing measurement boundaries of `TraceEntry.duration`; do not replace it with the new inclusive metric.
 Never sum nested durations or subtract parallel children to claim self/CPU time.
 
 Old sinks with only `push` still work. Optional `pushTiming` receives committed

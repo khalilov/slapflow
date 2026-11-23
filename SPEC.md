@@ -609,7 +609,7 @@ Trace entries contain:
 - input;
 - props;
 - dataBefore/dataAfter;
-- durationMs;
+- duration;
 - reason.
 
 Trace does not store a complete context snapshot.
@@ -748,7 +748,7 @@ type ConcurrencyOptions<TPayload> = {
   maxQueueSize?: number
   overflow?: 'drop-oldest' | 'drop-newest' | 'wait'
   events?: 'off' | 'sampled' | 'all'
-  eventsMinIntervalMs?: number
+  eventsMinInterval?: number
   coalesce?: ConcurrencyKey<TPayload> | null
 }
 
@@ -757,7 +757,7 @@ type PoolOptions = {
   maxQueueSize?: number
   overflow?: 'drop-oldest' | 'drop-newest' | 'wait'
   events?: 'off' | 'sampled' | 'all'
-  eventsMinIntervalMs?: number
+  eventsMinInterval?: number
 }
 ```
 
@@ -772,10 +772,10 @@ A `workers` binding without `pool` uses a private pool keyed by the binding. Nam
 ```ts
 poolStats(): Record<string, PoolStats>
 poolStats(pool: string): PoolStats
-drain(options?: { timeoutMs?: number }): Promise<{ drained: boolean; remaining: number }>
+drain(options?: { timeout?: number }): Promise<{ drained: boolean; remaining: number }>
 ```
 
-`poolStats` reports `active`, `queued`, `oldestQueuedMs`, and per-key lines; idle lines are evicted. `drain` stops accepting new runs, waits for pools and binding lanes to empty, and resolves `{ drained: true, remaining: 0 }` — or `{ drained: false, remaining }` on timeout. It is idempotent. `drain` itself only unbinds bindings; it does not block `runtime.enqueue` (in-flight producers keep placing work), so `ENQUEUE_DRAINING` is raised by `stop()`/reset, not by `drain`.
+`poolStats` reports `active`, `queued`, `oldestQueued`, and per-key lines; idle lines are evicted. `drain` stops accepting new runs, waits for pools and binding lanes to empty, and resolves `{ drained: true, remaining: 0 }` — or `{ drained: false, remaining }` on timeout. It is idempotent. `drain` itself only unbinds bindings; it does not block `runtime.enqueue` (in-flight producers keep placing work), so `ENQUEUE_DRAINING` is raised by `stop()`/reset, not by `drain`.
 
 `ActionArgs` and `Runtime` contain `signal: AbortSignal`. `latest` aborts the previous run in the same lane. `flow.stop({ force: true })` aborts every active run; normal `stop()` removes bindings and does not cancel running actions. Abort is cooperative: an action uses the signal for fetches, timers, and its own asynchronous work.
 
@@ -851,7 +851,29 @@ Set `maxStepCount` or `maxDepth` to `-1` to disable that check. Validation emits
 
 ## Strategy timing with trace
 
-There are two modes, controlled by the existing `trace` option. With trace disabled (the default), the runner does not allocate timing state, span objects or a timing array, does not call `performance.now()` for strategy spans, and omits `RunResult.timings`. With `trace: true` or a custom `TraceSink`, each strategy invocation produces a timing entry. `runSync` remains synchronous.
+With `trace: true`, the runner collects steps and per-strategy timings in the
+result. An existing `TraceSink` can receive detailed entries during execution.
+With `trace: false` or no option, tracing is disabled.
+
+Use `trace: { level: 'summary' | 'tree', callback? }` to observe runs directly:
+
+```ts
+const flow = createFlow(definition, {
+  context,
+  trace: { level: 'tree', callback: (event) => console.debug(event) },
+})
+```
+
+The default callback is `console.debug`. Each run reports `run-start` and
+`run-end` with the same `runId` and `entrypoint`. Runs triggered through a
+binding include `binding`, such as `[bus] message` or
+`[dom] button:click`. Pool runs include `pool`. The end event includes the
+final status, elapsed wall time in `duration`, and emitted event names.
+`summary` collects run-level information only. `tree` also collects the
+existing strategy timings and returns them in the run result. Its end event
+contains a timing tree with `children` in invocation order.
+Exceptions thrown by this callback leave the run outcome unchanged.
+`runSync` remains synchronous.
 
 ```ts
 type StrategyTiming = {
@@ -859,15 +881,15 @@ type StrategyTiming = {
   parentInvocationId: number | null
   strategy: string
   depth: number
-  startedAtMs: number
-  durationMs: number
+  startedAt: number
+  duration: number
   status: 'success' | 'skipped' | 'stopped' | 'failed'
 }
 ```
 
 `StrategyTiming` is exported from the package root. `RunResult.timings?: StrategyTiming[]` contains completed invocations in completion order. IDs are unique within a run; a root has `parentInvocationId: null`. Build the tree from IDs, not array positions. Parent IDs belong to the branch environment, so parallel children share their actual parent. An invocation that recovers through `catch` records its final result status. A transition rejected before entering a strategy has no entry.
 
-`startedAtMs` is the offset from run timing initialization, measured with `performance.now()`. `durationMs` is inclusive wall time: props, conditions, action, `then`/`catch` and Promise waits. A timeout span ends when the runner invocation ends, without waiting for the original action to settle. Existing `TraceEntry.durationMs`, order, data snapshots and variable redaction retain their previous semantics.
+`startedAt` is the offset from run timing initialization, measured with `performance.now()`. `duration` is inclusive wall time: props, conditions, action, `then`/`catch` and Promise waits. A timeout span ends when the runner invocation ends, without waiting for the original action to settle. Existing `TraceEntry.duration`, order, data snapshots and variable redaction retain their previous semantics.
 
 `TraceSink` accepts optional `pushTiming(entry: StrategyTiming): void`; existing sinks with only `push` still work and timing entries remain available in the run result. A timing entry is committed once before delivery to `pushTiming`. If `pushTiming` throws, its original exception propagates to the caller outside the action error/catch path, without changing the completed action outcome, retrying the action or recording a duplicate span. Ancestors still finalize their own spans. If finalizing an already thrown/rejected invocation also throws, its original error is preserved. The run is closed and its external abort listener is detached even when delivery throws; retained runtime writes and branch execution remain blocked after completion. The policy for existing `push` is unchanged.
 
@@ -876,13 +898,13 @@ Trace adds time and memory overhead and can expose snapshots; span fields themse
 ```ts
 const totals = new Map<string, { count: number; total: number; mean: number; max: number; skipped: number }>()
 
-for (const { strategy, durationMs, status } of result.timings ?? []) {
+for (const { strategy, duration, status } of result.timings ?? []) {
   const row = totals.get(strategy) ?? { count: 0, total: 0, mean: 0, max: 0, skipped: 0 }
 
   row.count += 1
-  row.total += durationMs
+  row.total += duration
   row.mean = row.total / row.count
-  row.max = Math.max(row.max, durationMs)
+  row.max = Math.max(row.max, duration)
   row.skipped += Number(status === 'skipped')
   totals.set(strategy, row)
 }

@@ -7,7 +7,7 @@ export const createInitialPools = (pools: Record<string, PoolOptions>): Map<stri
 
   each(
     pools,
-    (name, { workers, maxQueueSize, overflow, events, eventsMinIntervalMs }) => {
+    (name, { workers, maxQueueSize, overflow, events, eventsMinInterval }) => {
       byName.set(
         name,
         createPool({
@@ -17,7 +17,7 @@ export const createInitialPools = (pools: Record<string, PoolOptions>): Map<stri
           maxQueueSize: maxQueueSize ?? Infinity,
           overflow: overflow ?? 'wait',
           events: events ?? 'off',
-          eventsMinIntervalMs: eventsMinIntervalMs ?? 0,
+          eventsMinInterval: eventsMinInterval ?? 0,
         })
       )
     },
