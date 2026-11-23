@@ -451,8 +451,10 @@ export const createFlow = <TContext, TPatch = unknown, TEvents extends object = 
   const subscribeBusBinding = (binding: string, target: BusBinding): void => {
     const event = binding.slice(busBindingPrefix.length) as EventName<TEvents>
     const unsubscribe = bus.on(event, (busEvent) => {
-      if (isRecord(busEvent.parsed)) {
-        scheduleRun(binding, target, busEvent.parsed)
+      const input = target.options?.input === 'envelope' ? busEvent : busEvent.parsed
+
+      if (isRecord(input)) {
+        scheduleRun(binding, target, input)
       } else {
         emitDiagnostic('slapflow.run.dropped', {
           binding,
@@ -688,7 +690,7 @@ export const createFlow = <TContext, TPatch = unknown, TEvents extends object = 
     const validation = runner.loadConfig(definition.config)
     const active: string[] = []
     const inactive: StartResult['inactive'] = []
-    const bindings = map(
+    const bindings: FlowBindings = map(
       definition.events ?? {},
       (_binding, target) => {
         if (target !== undefined) {

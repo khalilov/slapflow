@@ -81,6 +81,41 @@ describe('flow', () => {
     assert.deepEqual(received, [{ context: { requestId: 'request-1' }, input: { email: 'ada@example.com' } }])
   })
 
+  it('passes the original bus envelope to queued runs when requested', async () => {
+    const bus = createPubSub<{ message: string }>()
+    const received: unknown[] = []
+    const flow = createFlow(
+      {
+        events: {
+          '[bus] message': {
+            entrypoint: 'read',
+            options: { input: 'envelope', concurrency: { mode: 'queue', key: ({ topic }) => topic } },
+          },
+        },
+        config: {
+          strategies: { read: { fn: 'capture', props: { origin: '$input.origin' } } },
+        },
+        actions: {
+          capture: async ({ input, props }) => {
+            await Promise.resolve()
+            received.push(input, props.origin)
+          },
+        },
+      },
+      { bus, context: {} }
+    )
+
+    assert.equal(flow.start().validation.ok, true)
+    const first = bus.emit('message', 'hello', { origin: 'game' })
+    const second = bus.emit('message', 'world', { origin: 'simulation' })
+
+    assert.equal((await flow.drain()).drained, true)
+    assert.deepEqual(received, [first, 'game', second, 'simulation'])
+    assert.equal(received[0], first)
+    assert.equal(received[2], second)
+    flow.stop()
+  })
+
   it('drops external bus envelopes with a non-object payload', () => {
     const bus = createPubSub<Events>()
     const diagnostics: string[] = []

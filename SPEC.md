@@ -702,7 +702,22 @@ const started = flow.start()
 flow.stop()
 ```
 
-A `[bus] <event-name>` binding starts an `entrypoint` from `config.entrypoints`. The event payload must be an object and is passed to the runner as `input`. Context is read for each event, so a context provider returns current state.
+A `[bus] <event-name>` binding starts a runner entrypoint. By default
+(`options.input: "payload"`), it passes the object payload as `input` and drops
+events whose payload is not an object.
+
+Use `options.input: "envelope"` to pass the original `BusEvent` as `input`. The
+graph can read `$input.origin` and `$input.parsed`. The envelope can carry a
+primitive payload. Concurrency key callbacks and declarative key references
+receive the same input as the runner.
+
+```ts
+events: {
+  '[bus] message': { entrypoint: 'socket-message', options: { input: 'envelope' } },
+}
+```
+
+Context is read for each event, so a context provider returns current state.
 
 ```ts
 type StartResult = {

@@ -1,7 +1,6 @@
-import { type ConcurrencyKey } from '~/types'
 import { pathReferenceRegex } from '~/helpers/path/pathReferenceRegex'
 
-export const isValidPoolKey = <TPayload>(key: ConcurrencyKey<TPayload>): boolean => {
+export const isValidPoolKey = (key: unknown): boolean => {
   if (typeof key === 'function') {
     return true
   }
@@ -10,5 +9,11 @@ export const isValidPoolKey = <TPayload>(key: ConcurrencyKey<TPayload>): boolean
 
     return match !== null && match[1] === 'input'
   }
-  return Array.isArray(key.$expression) && typeof key.$expression[0] === 'string'
+  return (
+    typeof key === 'object' &&
+    key !== null &&
+    '$expression' in key &&
+    Array.isArray(key.$expression) &&
+    typeof key.$expression[0] === 'string'
+  )
 }

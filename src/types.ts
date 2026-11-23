@@ -210,9 +210,7 @@ export type WSClient = {
 
 export type BindingEventMap = Record<string, Input>
 
-export type BusBindingKey<TEvents extends object> = {
-  [TEvent in EventName<TEvents>]: TEvents[TEvent] extends Input ? `[bus] ${TEvent}` : never
-}[EventName<TEvents>]
+export type BusBindingKey<TEvents extends object> = `[bus] ${EventName<TEvents>}`
 
 export type ConcurrencyMode = 'parallel' | 'latest' | 'queue' | 'drop' | 'workers'
 
@@ -323,12 +321,12 @@ export type Pool = PoolDefinition & {
   waiters: PoolWaiter[]
 }
 
-export type BusBinding<TPayload = Input> = {
-  entrypoint: string
-  options?: {
-    concurrency?: ConcurrencyOptions<TPayload>
-  }
-}
+export type BusBinding<TPayload = Input> = { entrypoint: string } & (
+  | { options: { input: 'envelope'; concurrency?: ConcurrencyOptions<BusEvent<TPayload>> } }
+  | ([TPayload] extends [Input]
+      ? { options?: { input?: 'payload'; concurrency?: ConcurrencyOptions<TPayload> } }
+      : never)
+)
 
 export type BusBindings<TEvents extends object> = {
   [TBinding in BusBindingKey<TEvents>]?: BusBinding<
