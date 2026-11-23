@@ -92,9 +92,8 @@ describe('flow', () => {
             options: { input: 'envelope', concurrency: { mode: 'queue', key: ({ topic }) => topic } },
           },
         },
-        config: {
-          strategies: { read: { fn: 'capture', props: { origin: '$input.origin' } } },
-        },
+        types: { origin: 'string' },
+        strategies: { read: { fn: 'capture', props: { origin: '$input.origin' } } },
         actions: {
           capture: async ({ input, props }) => {
             await Promise.resolve()

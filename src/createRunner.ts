@@ -87,13 +87,24 @@ export const createRunner = <TContext, TPatch = unknown>(
     return { ...result, warnings: [...result.warnings, ...runnerLimitWarnings(runnerOptions)] }
   }
 
-  const loadConfig = (nextConfig: Config): ValidationResult => {
-    const snapshot = snapshotConfig(nextConfig)
+  const loadConfig: Runner<TContext, TPatch>['loadConfig'] = (definition) => {
+    const nested = 'config' in definition
+    const config = 'strategies' in definition ? definition : definition.config
+    const snapshot = snapshotConfig(config)
+    const result = validateConfig(snapshot)
+
+    if (nested) {
+      result.warnings.push({
+        code: 'CONFIG_NESTED_DEPRECATED',
+        message: 'Nested config is deprecated. Pass config fields directly on the flow definition.',
+        path: 'config',
+      })
+    }
 
     configRef.current = resolveGuards(snapshot).config
     environment.validatedConditions = new WeakSet<object>()
 
-    return validateConfig(snapshot)
+    return result
   }
 
   const runInternal = (

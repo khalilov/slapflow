@@ -359,8 +359,14 @@ export type DomBinding = {
 
 export type DomBindings = Partial<Record<DomBindingKey, DomBinding>>
 
-export type FlowDefinition<TContext, TPatch = unknown, TEvents extends object = BindingEventMap> = {
-  config: Config
+type ConfigDefinition =
+  | Config
+  | {
+      /** @deprecated Pass the config fields directly on the definition. */
+      config: Config
+    }
+
+export type FlowDefinition<TContext, TPatch = unknown, TEvents extends object = BindingEventMap> = ConfigDefinition & {
   actions?: Record<string, Action<TContext, TPatch>>
   conditions?: Record<string, ConditionFn<TContext>>
   events?: BusBindings<TEvents> & DomBindings
@@ -570,7 +576,7 @@ export type Runner<TContext, TPatch = unknown> = {
   registerActions(actions: Record<string, Action<TContext, TPatch>>): void
   registerCondition(name: string, condition: ConditionFn<TContext>): void
   registerConditions(conditions: Record<string, ConditionFn<TContext>>): void
-  loadConfig(config: Config): ValidationResult
+  loadConfig(config: ConfigDefinition): ValidationResult
   validateConfig(config?: Config): ValidationResult
   run(entrypoint: string, context: TContext, input?: Input, options?: RunOptions): Promise<RunResult<TContext, TPatch>>
   runSync(entrypoint: string, context: TContext, input?: Input, options?: RunOptions): RunResult<TContext, TPatch>

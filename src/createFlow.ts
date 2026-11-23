@@ -687,7 +687,7 @@ export const createFlow = <TContext, TPatch = unknown, TEvents extends object = 
     drainResolve = undefined
     lastEmitByPool.clear()
 
-    const validation = runner.loadConfig(definition.config)
+    const validation = runner.loadConfig(definition)
     const active: string[] = []
     const inactive: StartResult['inactive'] = []
     const bindings: FlowBindings = map(

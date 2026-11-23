@@ -73,10 +73,8 @@ const flow = createFlow<Context, unknown, Events>(
         }
       },
     },
-    config: {
-      entrypoints: { 'order.submit': 'order.submit' },
-      strategies: { 'order.submit': { fn: 'order.submit' } },
-    },
+    entrypoints: { 'order.submit': 'order.submit' },
+    strategies: { 'order.submit': { fn: 'order.submit' } },
   },
   { bus, context }
 )
@@ -104,7 +102,7 @@ Events trigger execution. All three routes are valid:
 Enable `trace: true` to inspect the complete time of each strategy invocation:
 
 ```ts
-const flow = createFlow({ config, actions }, { context, trace: true })
+const flow = createFlow({ ...config, actions }, { context, trace: true })
 
 flow.start()
 console.table((await flow.runner.run('order.submit', context, { orderId: 'order-1' })).timings)

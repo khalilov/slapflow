@@ -19,7 +19,11 @@ export const validateConfig = (
   const warnings: ValidationIssue[] = []
 
   if (config !== null && config !== undefined && typeof config === 'object') {
-    const { strategies } = config
+    const { strategies, types } = config
+
+    if (types !== undefined) {
+      validateTypes(types, errors)
+    }
 
     if (strategies !== null && typeof strategies === 'object' && Array.isArray(strategies) === false) {
       const guardResolution = resolveGuards(config)
@@ -36,10 +40,6 @@ export const validateConfig = (
             { shallow: true }
           )
         }
-      }
-
-      if (config.types !== undefined) {
-        validateTypes(config.types, errors)
       }
 
       for (const issue of guardResolution.issues) {
@@ -108,7 +108,10 @@ export const validateConfig = (
     }
     return {
       ok: false,
-      errors: [{ code: 'CONFIG_INVALID', message: 'Config must include a strategies object', path: 'strategies' }],
+      errors: [
+        { code: 'CONFIG_INVALID', message: 'Config must include a strategies object', path: 'strategies' },
+        ...errors,
+      ],
       warnings,
     }
   }

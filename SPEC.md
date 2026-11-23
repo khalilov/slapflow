@@ -31,7 +31,7 @@ import {
 ```
 
 ```ts
-const flow = createFlow<Context, Patch>({ config: { strategies: {} } }, { context: () => ({}) as Context })
+const flow = createFlow<Context, Patch>({ strategies: {} }, { context: () => ({}) as Context })
 const runner = flow.runner
 
 runner.registerAction('jobs.execute', executeJob)
@@ -154,10 +154,7 @@ const reportError = defineErrorReporter({
   },
 })
 
-const flow = createFlow(
-  { config: { strategies: {} } },
-  { context: () => ({}) as Context, trace: true, onError: reportError }
-)
+const flow = createFlow({ strategies: {} }, { context: () => ({}) as Context, trace: true, onError: reportError })
 ```
 
 `onError` receives `SlapErrorEvent`:
@@ -471,7 +468,7 @@ Register via `expressions` in runner options. The operator receives resolved arg
 
 ```ts
 const flow = createFlow(
-  { config, actions, conditions },
+  { ...config, actions, conditions },
   {
     context: () => state,
     bus,
@@ -683,6 +680,11 @@ Exact-name subscriptions stay O(1); wildcard patterns are matched separately, so
 
 `createFlow` combines configuration, actions, conditions, a context provider, and event bindings. It creates a runner (accessible via `flow.runner`) and supports the `start`/`stop` lifecycle.
 
+Pass graph fields (`version`, `types`, `guards`, `entrypoints`, `strategies`)
+alongside `actions`, `conditions`, and `events`. The legacy nested `config`
+form produces a `CONFIG_NESTED_DEPRECATED` validation warning. If both forms
+are present, the top-level graph takes precedence as a whole.
+
 ```ts
 type Events = {
   'form.submit': { email: string }
@@ -693,7 +695,7 @@ const flow = createFlow<Context, Patch, Events>(
     actions: { 'form.save': saveForm },
     conditions: { allowed: isAllowed },
     events: { '[bus] form.submit': { entrypoint: 'form.submit' } },
-    config,
+    ...config,
   },
   { bus, context: () => appStore.getState() }
 )

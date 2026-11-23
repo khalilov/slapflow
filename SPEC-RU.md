@@ -31,7 +31,7 @@ import {
 ```
 
 ```ts
-const flow = createFlow<Context, Patch>({ config: { strategies: {} } }, { context: () => ({}) as Context })
+const flow = createFlow<Context, Patch>({ strategies: {} }, { context: () => ({}) as Context })
 const runner = flow.runner
 
 runner.registerAction('jobs.execute', executeJob)
@@ -156,10 +156,7 @@ const reportError = defineErrorReporter({
   },
 })
 
-const flow = createFlow(
-  { config: { strategies: {} } },
-  { context: () => ({}) as Context, trace: true, onError: reportError }
-)
+const flow = createFlow({ strategies: {} }, { context: () => ({}) as Context, trace: true, onError: reportError })
 ```
 
 `onError` получает `SlapErrorEvent`:
@@ -483,7 +480,7 @@ type Runtime = {
 
 ```ts
 const flow = createFlow(
-  { config, actions, conditions },
+  { ...config, actions, conditions },
   {
     context: () => state,
     bus,
@@ -695,6 +692,11 @@ bus.on('hub.*.export', ({ parsed }) => {}) // НЕ hub.user.audit.export (оди
 
 `createFlow` объединяет конфигурацию, действия, условия, поставщик контекста и привязки событий. Функция создаёт исполнитель (доступный через `flow.runner`) и поддерживает жизненный цикл `start`/`stop`.
 
+Передавайте поля графа (`version`, `types`, `guards`, `entrypoints`,
+`strategies`) на одном уровне с `actions`, `conditions` и `events`. Вложенная
+форма `config` даёт предупреждение `CONFIG_NESTED_DEPRECATED` при валидации.
+Если переданы обе формы, граф верхнего уровня используется целиком.
+
 ```ts
 type Events = {
   'form.submit': { email: string }
@@ -705,7 +707,7 @@ const flow = createFlow<Context, Patch, Events>(
     actions: { 'form.save': saveForm },
     conditions: { allowed: isAllowed },
     events: { '[bus] form.submit': { entrypoint: 'form.submit' } },
-    config,
+    ...config,
   },
   { bus, context: () => appStore.getState() }
 )

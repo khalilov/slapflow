@@ -271,7 +271,7 @@ Each binding supports five modes. Default is `parallel`.
 
 ```ts
 const flow = createFlow<Context, Patch, Events>(
-  { config, actions, conditions, events: { '[bus] job.queued': { entrypoint: 'worker.tick' } } },
+  { ...config, actions, conditions, events: { '[bus] job.queued': { entrypoint: 'worker.tick' } } },
   { context: () => store.getState(), bus, concurrency: { mode: 'latest', key: (p) => p.jobId } }
 )
 ```
@@ -515,7 +515,7 @@ const reportError = defineErrorReporter({
   },
 })
 
-const flow = createFlow({ config, actions, conditions }, { context, bus, onError: reportError })
+const flow = createFlow({ ...config, actions, conditions }, { context, bus, onError: reportError })
 ```
 
 `onRunnerError` in `FlowOptions` fires **only** when the final `RunResult.status === 'failed'` (i.e. `catch` did not
@@ -549,7 +549,7 @@ Enable with `trace: true` in flow options. Each entry records: step/depth, strat
 dataBefore/dataAfter, durationMs, reason. Does not store a full context snapshot.
 
 ```ts
-const flow = createFlow({ config, actions, conditions }, { context, bus, trace: true })
+const flow = createFlow({ ...config, actions, conditions }, { context, bus, trace: true })
 // result.trace contains TraceEntry[]
 ```
 

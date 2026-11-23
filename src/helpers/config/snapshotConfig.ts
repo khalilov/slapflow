@@ -30,7 +30,14 @@ export const snapshotConfig = (config: Config): Config => {
     return value
   }
 
-  const snapshot = copyValue(config)
+  const { version, types, strategies, entrypoints, guards } = config
+  const snapshot = copyValue({
+    strategies,
+    ...(version === undefined ? {} : { version }),
+    ...(types === undefined ? {} : { types }),
+    ...(entrypoints === undefined ? {} : { entrypoints }),
+    ...(guards === undefined ? {} : { guards }),
+  })
 
   // Conditions can retain types; the remaining snapshot stays private to the runner.
   freezeConfigValue(snapshot.types)

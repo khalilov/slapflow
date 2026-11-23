@@ -72,6 +72,6 @@
   },
   "sideEffects": false,
   "dependencies": {
-    "objwalk": "^1.10.0"
+    "objwalk": "^1.11.0"
   }
 }
